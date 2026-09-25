@@ -285,18 +285,42 @@ const App = {
   },
 
   async logout() {
-    if (!confirm('Apakah Anda yakin ingin keluar?')) return;
+    if (!confirm('Apakah Anda yakin ingin keluar dari akun?')) return;
     try {
       await fetch('api/auth.php?action=logout');
-      localStorage.removeItem('kas_token');
-      this.state.user = null;
-      this.updateUserUI();
-      this.showToast('Berhasil keluar.', 'success');
-      this.loadDashboard();
-      this.loadDosenList();
     } catch (err) {
-      console.error(err);
+      console.error('Logout error:', err);
     }
+
+    // Hapus sesi & token
+    localStorage.removeItem('kas_token');
+    this.state.user = null;
+    this.updateUserUI();
+
+    // Tutup seluruh modal lain yang aktif
+    document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+
+    // Pindahkan tab ke beranda di latar belakang
+    this.switchTab('beranda');
+
+    // Kosongkan input form login sebelumnya
+    const loginForm = document.querySelector('#modalLogin form');
+    if (loginForm) loginForm.reset();
+
+    // Langsung buka form login di layar
+    this.openModal('modalLogin');
+
+    // Auto-fokus ke input username/NIDN setelah animasi modal
+    setTimeout(() => {
+      const userInput = document.querySelector('#modalLogin input[name="username"]');
+      if (userInput) userInput.focus();
+    }, 350);
+
+    this.showToast('Anda telah keluar. Silakan masuk kembali.', 'info');
+
+    // Muat ulang data dashboard dan dosen di latar belakang
+    this.loadDashboard();
+    this.loadDosenList();
   },
 
   // 3. Tab Navigation

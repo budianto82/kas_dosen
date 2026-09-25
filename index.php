@@ -407,7 +407,10 @@ $pdo = getDBConnection();
             </div>
           </div>
           <div class="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
-            <span class="text-[11px] text-slate-300">Foto Profil Akun Anda</span>
+            <button onclick="App.logout()" type="button" class="text-[11px] text-rose-300 hover:text-rose-200 font-bold flex items-center gap-1.5 transition-colors">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+              <span>Keluar Akun</span>
+            </button>
             <label for="inputUploadFotoProfil" class="text-[11px] text-amber-300 hover:text-amber-200 font-bold cursor-pointer flex items-center gap-1.5">
               <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
               <span>Unggah Foto Profil</span>
@@ -469,8 +472,14 @@ $pdo = getDBConnection();
     <div class="modal-sheet">
       <div class="sheet-handle"></div>
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-bold text-slate-800">Masuk Akun Kas Dosen</h3>
-        <button onclick="App.closeModal('modalLogin')" class="text-slate-400 hover:text-slate-600">
+        <div class="flex items-center gap-2.5">
+          <img src="assets/img/logo_unpam.png" alt="UNPAM" class="w-8 h-8 object-contain">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 leading-tight">Masuk Akun Kas Dosen</h3>
+            <p class="text-[10px] text-slate-500">Sistem Informasi Universitas Pamulang</p>
+          </div>
+        </div>
+        <button onclick="App.closeModal('modalLogin')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100" title="Tutup">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>

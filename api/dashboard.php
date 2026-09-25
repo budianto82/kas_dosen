@@ -12,37 +12,50 @@ $pdo = getDBConnection();
 $bulanIni = (int)date('n');
 $tahunIni = (int)date('Y');
 
-// 1. Hitung Total Pemasukan Sepanjang Waktu
-$totalPemasukan = (float)($pdo->query("SELECT COALESCE(SUM(nominal), 0) FROM iuran WHERE status = 'lunas'")->fetchColumn() ?: 0);
+// 1. Pemasukan (Total & Bulan ini) dalam 1 query hemat round-trip
+$stmtIn = $pdo->prepare("
+    SELECT 
+        COALESCE(SUM(nominal), 0) AS total_all,
+        COALESCE(SUM(CASE WHEN bulan = ? AND tahun = ? THEN nominal ELSE 0 END), 0) AS total_bulan_ini,
+        COUNT(DISTINCT CASE WHEN bulan = ? AND tahun = ? THEN dosen_id ELSE NULL END) AS dosen_lunas_bulan_ini
+    FROM iuran WHERE status = 'lunas'
+");
+$stmtIn->execute([$bulanIni, $tahunIni, $bulanIni, $tahunIni]);
+$inData = $stmtIn->fetch() ?: ['total_all' => 0, 'total_bulan_ini' => 0, 'dosen_lunas_bulan_ini' => 0];
 
-// 2. Hitung Total Pengeluaran Sepanjang Waktu
-$totalPengeluaran = (float)($pdo->query("SELECT COALESCE(SUM(nominal), 0) FROM pengeluaran")->fetchColumn() ?: 0);
+$totalPemasukan = (float)$inData['total_all'];
+$pemasukanBulanIni = (float)$inData['total_bulan_ini'];
+$dosenLunasBulanIni = (int)$inData['dosen_lunas_bulan_ini'];
 
-// 3. Saldo Saat Ini
+// 2. Pengeluaran (Total & Bulan ini) dalam 1 query
+$stmtOut = $pdo->prepare("
+    SELECT 
+        COALESCE(SUM(nominal), 0) AS total_all,
+        COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM tanggal) = ? AND EXTRACT(YEAR FROM tanggal) = ? THEN nominal ELSE 0 END), 0) AS total_bulan_ini
+    FROM pengeluaran
+");
+$stmtOut->execute([$bulanIni, $tahunIni]);
+$outData = $stmtOut->fetch() ?: ['total_all' => 0, 'total_bulan_ini' => 0];
+
+$totalPengeluaran = (float)$outData['total_all'];
+$pengeluaranBulanIni = (float)$outData['total_bulan_ini'];
 $saldoKas = $totalPemasukan - $totalPengeluaran;
 
-// 4. Pemasukan Bulan Ini
-$stmtPemasukanBulan = $pdo->prepare("SELECT COALESCE(SUM(nominal), 0) FROM iuran WHERE status = 'lunas' AND bulan = ? AND tahun = ?");
-$stmtPemasukanBulan->execute([$bulanIni, $tahunIni]);
-$pemasukanBulanIni = (float)$stmtPemasukanBulan->fetchColumn();
+// 3. Total Dosen Aktif & Jumlah Menunggu Validasi Bukti Transfer
+$dosenStats = $pdo->query("
+    SELECT 
+        (SELECT COUNT(*) FROM dosen WHERE status = 'aktif') AS total_dosen,
+        (SELECT COUNT(*) FROM iuran WHERE status = 'pending') AS total_pending_validasi
+")->fetch();
 
-// 5. Pengeluaran Bulan Ini
-$stmtPengeluaranBulan = $pdo->prepare("SELECT COALESCE(SUM(nominal), 0) FROM pengeluaran WHERE EXTRACT(MONTH FROM tanggal) = ? AND EXTRACT(YEAR FROM tanggal) = ?");
-$stmtPengeluaranBulan->execute([$bulanIni, $tahunIni]);
-$pengeluaranBulanIni = (float)$stmtPengeluaranBulan->fetchColumn();
-
-// 6. Data Dosen & Partisipasi Bulan Ini
-$totalDosen = (int)$pdo->query("SELECT COUNT(*) FROM dosen WHERE status = 'aktif'")->fetchColumn();
-
-$stmtLunasBulan = $pdo->prepare("SELECT COUNT(DISTINCT dosen_id) FROM iuran WHERE status = 'lunas' AND bulan = ? AND tahun = ?");
-$stmtLunasBulan->execute([$bulanIni, $tahunIni]);
-$dosenLunasBulanIni = (int)$stmtLunasBulan->fetchColumn();
+$totalDosen = (int)($dosenStats['total_dosen'] ?? 0);
+$totalPendingValidasi = (int)($dosenStats['total_pending_validasi'] ?? 0);
 $dosenBelumLunasBulanIni = max(0, $totalDosen - $dosenLunasBulanIni);
 
-// 7. Pengaturan Dasar (Info Bank, Nominal Iuran)
+// 4. Pengaturan Dasar
 $pengaturanRows = $pdo->query("SELECT setting_key, setting_value FROM pengaturan")->fetchAll(PDO::FETCH_KEY_PAIR);
 
-// 8. 5 Transaksi Terakhir (Kombinasi Pemasukan & Pengeluaran)
+// 5. 6 Transaksi Terakhir
 $recentSql = <<<SQL
     SELECT 
         'masuk' as tipe,
@@ -74,31 +87,64 @@ $recentSql = <<<SQL
 SQL;
 $recentTransactions = $pdo->query($recentSql)->fetchAll();
 
-// 9. Statistik 6 Bulan Terakhir (Chart)
-$chartLabels = [];
-$chartPemasukan = [];
-$chartPengeluaran = [];
-
+// 6. Statistik 6 Bulan Terakhir (Batch Query - Cepat)
 $namaBulanIndo = [
     1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
     7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'
 ];
 
+$monthsMap = [];
+$startDateLimit = date('Y-m-01', strtotime('-5 months'));
+
 for ($i = 5; $i >= 0; $i--) {
     $time = strtotime("-$i months");
     $m = (int)date('n', $time);
     $y = (int)date('Y', $time);
-    $chartLabels[] = $namaBulanIndo[$m] . ' ' . substr((string)$y, 2);
+    $key = "{$y}_{$m}";
+    $monthsMap[$key] = [
+        'label' => $namaBulanIndo[$m] . ' ' . substr((string)$y, 2),
+        'in' => 0.0,
+        'out' => 0.0
+    ];
+}
 
-    // Sum pemasukan
-    $stIn = $pdo->prepare("SELECT COALESCE(SUM(nominal), 0) FROM iuran WHERE status = 'lunas' AND bulan = ? AND tahun = ?");
-    $stIn->execute([$m, $y]);
-    $chartPemasukan[] = (float)$stIn->fetchColumn();
+// Ambil sekaligus pemasukan 6 bulan
+$stmtBatchIn = $pdo->prepare("
+    SELECT bulan, tahun, COALESCE(SUM(nominal), 0) as total 
+    FROM iuran 
+    WHERE status = 'lunas' AND tanggal_bayar >= ?
+    GROUP BY bulan, tahun
+");
+$stmtBatchIn->execute([$startDateLimit]);
+foreach ($stmtBatchIn->fetchAll() as $row) {
+    $k = $row['tahun'] . '_' . $row['bulan'];
+    if (isset($monthsMap[$k])) {
+        $monthsMap[$k]['in'] = (float)$row['total'];
+    }
+}
 
-    // Sum pengeluaran
-    $stOut = $pdo->prepare("SELECT COALESCE(SUM(nominal), 0) FROM pengeluaran WHERE EXTRACT(MONTH FROM tanggal) = ? AND EXTRACT(YEAR FROM tanggal) = ?");
-    $stOut->execute([$m, $y]);
-    $chartPengeluaran[] = (float)$stOut->fetchColumn();
+// Ambil sekaligus pengeluaran 6 bulan
+$stmtBatchOut = $pdo->prepare("
+    SELECT EXTRACT(MONTH FROM tanggal) as bulan, EXTRACT(YEAR FROM tanggal) as tahun, COALESCE(SUM(nominal), 0) as total 
+    FROM pengeluaran 
+    WHERE tanggal >= ?
+    GROUP BY EXTRACT(MONTH FROM tanggal), EXTRACT(YEAR FROM tanggal)
+");
+$stmtBatchOut->execute([$startDateLimit]);
+foreach ($stmtBatchOut->fetchAll() as $row) {
+    $k = ((int)$row['tahun']) . '_' . ((int)$row['bulan']);
+    if (isset($monthsMap[$k])) {
+        $monthsMap[$k]['out'] = (float)$row['total'];
+    }
+}
+
+$chartLabels = [];
+$chartPemasukan = [];
+$chartPengeluaran = [];
+foreach ($monthsMap as $mInfo) {
+    $chartLabels[] = $mInfo['label'];
+    $chartPemasukan[] = $mInfo['in'];
+    $chartPengeluaran[] = $mInfo['out'];
 }
 
 jsonResponse([
@@ -115,6 +161,7 @@ jsonResponse([
         'pengeluaran_bulan_ini' => $pengeluaranBulanIni,
         'pengeluaran_bulan_ini_formatted' => formatRupiah($pengeluaranBulanIni),
         'total_dosen' => $totalDosen,
+        'total_pending_validasi' => $totalPendingValidasi,
         'dosen_lunas_bulan_ini' => $dosenLunasBulanIni,
         'dosen_belum_lunas_bulan_ini' => $dosenBelumLunasBulanIni,
         'persen_lunas' => $totalDosen > 0 ? round(($dosenLunasBulanIni / $totalDosen) * 100) : 0,

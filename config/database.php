@@ -35,6 +35,11 @@ function getDBConnection(): PDO {
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
+            try {
+                $pdo->exec("ALTER TABLE iuran ALTER COLUMN bukti_bayar TYPE TEXT");
+                $pdo->exec("ALTER TABLE iuran ADD COLUMN IF NOT EXISTS catatan_bendahara TEXT");
+                $pdo->exec("CREATE TABLE IF NOT EXISTS pengaturan (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)");
+            } catch (Throwable $e) {}
             return $pdo;
         }
 
@@ -51,6 +56,14 @@ function getDBConnection(): PDO {
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
+
+            try {
+                $pdo->exec("ALTER TABLE iuran MODIFY bukti_bayar LONGTEXT");
+                $pdo->exec("ALTER TABLE iuran ADD COLUMN catatan_bendahara TEXT");
+            } catch (Throwable $e) {}
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS `pengaturan` (`setting_key` VARCHAR(100) PRIMARY KEY, `setting_value` TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            } catch (Throwable $e) {}
 
             // Cek apakah tabel sudah ada
             $checkTable = $pdo->query("SHOW TABLES LIKE 'dosen'")->rowCount();

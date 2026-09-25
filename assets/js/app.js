@@ -28,6 +28,8 @@ const App = {
     dashboardData: null,
     dosenList: [],
     kategoriList: [],
+    settings: {},
+    pendingIuranList: [],
     currentTahun: new Date().getFullYear(),
     currentBulan: new Date().getMonth() + 1,
     deferredInstallPrompt: null
@@ -83,9 +85,13 @@ const App = {
         this.state.user = null;
       }
       this.updateUserUI();
-      this.loadDashboard();
-      this.loadKategori();
-      this.loadDosenList();
+      // Load all data concurrently for high performance
+      await Promise.all([
+        this.loadSettings(),
+        this.loadDashboard(),
+        this.loadKategori(),
+        this.loadDosenList()
+      ]);
     } catch (err) {
       console.error('Check session error:', err);
       this.loadDashboard();
@@ -164,11 +170,26 @@ const App = {
     const btnCaraBayar = document.getElementById('btnCaraBayar');
     const btnCatatPengeluaran = document.getElementById('btnCatatPengeluaran');
     const btnTambahDosen = document.getElementById('btnTambahDosen');
+    const btnSettings = document.getElementById('btnSettingsAction');
+    const btnKirimTfTab = document.getElementById('btnKirimBuktiTfTab');
+    const quickDosenTfWrap = document.getElementById('quickDosenTfWrap');
+    const pendingSection = document.getElementById('pendingValidationSection');
 
     if (btnTambahIuran) btnTambahIuran.classList.toggle('hidden', !isBendahara);
     if (btnCaraBayar) btnCaraBayar.classList.toggle('hidden', isBendahara);
     if (btnCatatPengeluaran) btnCatatPengeluaran.classList.toggle('hidden', !isBendahara);
     if (btnTambahDosen) btnTambahDosen.classList.toggle('hidden', !isBendahara);
+    if (btnSettings) btnSettings.classList.toggle('hidden', !isBendahara);
+    if (btnKirimTfTab) btnKirimTfTab.classList.toggle('hidden', isBendahara);
+    if (quickDosenTfWrap) quickDosenTfWrap.classList.toggle('hidden', isBendahara);
+    if (pendingSection) pendingSection.classList.toggle('hidden', !isBendahara);
+
+    if (isBendahara) {
+      this.loadPendingIuran();
+    } else {
+      const alertEl = document.getElementById('dashPendingValidationAlert');
+      if (alertEl) alertEl.classList.add('hidden');
+    }
 
     // Menu Cepat di Beranda
     const quickBayarText = document.getElementById('quickActionBayarText');
@@ -367,6 +388,19 @@ const App = {
     const elPersen = document.getElementById('dashPersenLunas');
     if (elPersen) {
       elPersen.textContent = `${d.persen_lunas}% Lunas (${d.periode_aktif})`;
+    }
+
+    // Alert Menunggu Validasi (Khusus Bendahara)
+    const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
+    const alertEl = document.getElementById('dashPendingValidationAlert');
+    const countEl = document.getElementById('dashPendingCountText');
+    if (alertEl && countEl) {
+      if (isBendahara && d.total_pending_validasi > 0) {
+        alertEl.classList.remove('hidden');
+        countEl.textContent = `${d.total_pending_validasi} Bukti Transfer Menunggu Validasi`;
+      } else {
+        alertEl.classList.add('hidden');
+      }
     }
 
     // Info Rekening Kas
@@ -1248,6 +1282,339 @@ const App = {
     const namaEl = document.getElementById('modalDetailDosenTitle');
     const nama = namaEl ? namaEl.textContent : 'Dosen ini';
     this.confirmDeleteDosen(this.activeDetailDosenId, nama);
+  },
+
+  // 10b. Kirim & Validasi Bukti Transfer Dosen
+  tempBuktiTfBase64: null,
+
+  openModalKirimBuktiTf() {
+    // Populate Dosen Dropdown
+    const select = document.getElementById('kirimTfDosenSelect');
+    if (select) {
+      const list = this.state.dosenList || [];
+      select.innerHTML = '<option value="">-- Pilih Nama Dosen --</option>' + 
+        list.map(d => `<option value="${d.id}" data-nidn="${d.nidn}">${d.nama}${d.gelar ? ', ' + d.gelar : ''} (${d.nidn})</option>`).join('');
+
+      // Auto-select jika login sebagai dosen
+      const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
+      if (this.state.user && this.state.user.nidn && !isBendahara) {
+        const found = list.find(d => d.nidn === this.state.user.nidn);
+        if (found) {
+          select.value = found.id;
+          select.disabled = true;
+        }
+      } else {
+        select.disabled = false;
+      }
+    }
+
+    // Set bulan & tahun saat ini
+    const blnSelect = document.getElementById('kirimTfBulanSelect');
+    if (blnSelect) blnSelect.value = String(this.state.currentBulan || (new Date().getMonth() + 1));
+    const thnInput = document.getElementById('kirimTfTahunInput');
+    if (thnInput) thnInput.value = String(this.state.currentTahun || new Date().getFullYear());
+
+    // Update info rekening & tarif dari pengaturan
+    const settings = this.state.settings || {};
+    const tarif = settings.nominal_iuran_bulanan ? this.formatRupiah(settings.nominal_iuran_bulanan) + ' / bln' : 'Rp 30.000 / bln';
+    const badge = document.getElementById('kirimTfNominalBadge');
+    if (badge) badge.textContent = tarif;
+    const bankRek = document.getElementById('kirimTfBankRek');
+    if (bankRek) bankRek.textContent = `${settings.nama_bank || 'Bank BTN'}: ${settings.nomor_rekening || '4401500586720'}`;
+    const atasNama = document.getElementById('kirimTfAtasNama');
+    if (atasNama) atasNama.textContent = `a.n. ${settings.atas_nama || 'Ayu Ernawati, S.Kom., M.Kom.'}`;
+
+    // Reset upload file
+    this.tempBuktiTfBase64 = null;
+    const fileInput = document.getElementById('inputBuktiTfFile');
+    if (fileInput) fileInput.value = '';
+    const placeholder = document.getElementById('buktiTfPlaceholder');
+    const previewWrap = document.getElementById('buktiTfPreviewWrap');
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (previewWrap) previewWrap.classList.add('hidden');
+
+    this.openModal('modalKirimBuktiTf');
+    if (window.lucide) lucide.createIcons();
+  },
+
+  handleBuktiTfFileChange(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.showToast('Pilih file gambar (JPG, PNG, WebP).', 'error');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Kompresi gambar via canvas (max 900px, quality 0.72)
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 900;
+
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        this.tempBuktiTfBase64 = canvas.toDataURL('image/jpeg', 0.72);
+
+        const previewImg = document.getElementById('buktiTfPreviewImg');
+        const placeholder = document.getElementById('buktiTfPlaceholder');
+        const previewWrap = document.getElementById('buktiTfPreviewWrap');
+
+        if (previewImg) previewImg.src = this.tempBuktiTfBase64;
+        if (placeholder) placeholder.classList.add('hidden');
+        if (previewWrap) previewWrap.classList.remove('hidden');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  },
+
+  async submitBuktiTransfer(e) {
+    e.preventDefault();
+    const selectDosen = document.getElementById('kirimTfDosenSelect');
+    const dosenId = selectDosen ? selectDosen.value : '';
+    const bulan = document.getElementById('kirimTfBulanSelect')?.value || '';
+    const tahun = document.getElementById('kirimTfTahunInput')?.value || '';
+    const form = e.target;
+    const keterangan = form.querySelector('input[name="keterangan"]')?.value || 'Transfer via Mobile';
+
+    if (!dosenId) {
+      this.showToast('Pilih dosen pengirim terlebih dahulu.', 'error');
+      return;
+    }
+    if (!this.tempBuktiTfBase64) {
+      this.showToast('Foto bukti transfer wajib dipilih.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmitBuktiTf');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span> Mengirim...';
+    }
+
+    try {
+      const res = await fetch('api/iuran.php?action=submit_transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dosen_id: dosenId,
+          bulan: bulan,
+          tahun: tahun,
+          keterangan: keterangan,
+          bukti_bayar: this.tempBuktiTfBase64
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast(data.message, 'success');
+        this.closeModal('modalKirimBuktiTf');
+        this.loadDashboard();
+        if (this.state.currentTab === 'iuran') this.loadIuranTab();
+      } else {
+        this.showToast(data.message || 'Gagal mengirim bukti transfer.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i><span>Kirim Bukti Transfer</span>';
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+  },
+
+  async loadPendingIuran() {
+    const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
+    if (!isBendahara) return;
+
+    try {
+      const res = await fetch('api/iuran.php?action=pending_list');
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.state.pendingIuranList = data.data;
+        this.renderPendingIuran(data.data);
+      }
+    } catch (err) {
+      console.error('Error load pending iuran:', err);
+    }
+  },
+
+  renderPendingIuran(list) {
+    const section = document.getElementById('pendingValidationSection');
+    const container = document.getElementById('pendingValidationList');
+    const badgeCount = document.getElementById('pendingValidationBadgeCount');
+    const alertEl = document.getElementById('dashPendingValidationAlert');
+    const countEl = document.getElementById('dashPendingCountText');
+
+    if (!section || !container) return;
+
+    if (!list || list.length === 0) {
+      section.classList.add('hidden');
+      if (alertEl) alertEl.classList.add('hidden');
+      return;
+    }
+
+    section.classList.remove('hidden');
+    if (badgeCount) badgeCount.textContent = `${list.length} Dosen`;
+    if (alertEl && countEl) {
+      alertEl.classList.remove('hidden');
+      countEl.textContent = `${list.length} Bukti Transfer Menunggu Validasi`;
+    }
+
+    container.innerHTML = list.map(item => `
+      <div class="p-3 bg-white rounded-xl border border-amber-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <!-- Thumbnail Bukti Bayar -->
+          <div onclick="App.viewImageModal('${item.bukti_bayar}', 'Bukti TF - ${item.nama_lengkap}')" class="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 relative group shadow-sm" title="Ketuk untuk melihat foto bukti">
+            <img src="${item.bukti_bayar}" alt="Bukti TF" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <i data-lucide="zoom-in" class="w-4 h-4 text-white"></i>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-slate-800">${item.nama_lengkap}</div>
+            <div class="text-[11px] text-slate-500 font-mono">NIDOS: ${item.nidn}</div>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800">
+                ${item.periode_formatted}
+              </span>
+              <span class="font-mono text-[11px] font-bold text-emerald-600">
+                ${item.nominal_formatted}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi Validasi (1-Klik) -->
+        <div class="flex items-center gap-2 self-end sm:self-center">
+          <button onclick="App.validasiIuran(${item.id}, 'ditolak')" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold border border-rose-200 transition-colors">
+            Tolak
+          </button>
+          <button onclick="App.validasiIuran(${item.id}, 'lunas')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1">
+            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+            <span>✓ Validasi Lunas</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    if (window.lucide) lucide.createIcons();
+  },
+
+  async validasiIuran(iuranId, status) {
+    if (status === 'ditolak') {
+      if (!confirm('Apakah Anda yakin ingin menolak bukti transfer ini?')) return;
+    }
+
+    this.showToast('Memproses validasi...', 'info');
+
+    try {
+      const res = await fetch('api/iuran.php?action=verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: iuranId, status: status })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast(data.message, 'success');
+        this.loadPendingIuran();
+        this.loadDashboard();
+        if (this.state.currentTab === 'iuran') this.loadIuranTab();
+      } else {
+        this.showToast(data.message || 'Gagal memvalidasi iuran.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('Terjadi kesalahan jaringan.', 'error');
+    }
+  },
+
+  // 10c. Pengaturan Kas
+  async loadSettings() {
+    try {
+      const res = await fetch('api/settings.php?action=get');
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.state.settings = data.data || {};
+      }
+    } catch (err) {
+      console.error('Error load settings:', err);
+    }
+  },
+
+  openSettingsModal() {
+    const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
+    if (!isBendahara) {
+      this.showToast('Hanya Bendahara yang dapat mengubah pengaturan.', 'error');
+      return;
+    }
+
+    const s = this.state.settings || {};
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val || '';
+    };
+
+    setVal('settingNominalIuran', s.nominal_iuran_bulanan || 30000);
+    setVal('settingNamaBank', s.nama_bank || 'Bank BTN');
+    setVal('settingNoRek', s.nomor_rekening || '4401500586720');
+    setVal('settingAtasNama', s.atas_nama || 'Ayu Ernawati, S.Kom., M.Kom.');
+    setVal('settingNamaBendahara', s.nama_bendahara || 'Ayu Ernawati, S.Kom., M.Kom.');
+    setVal('settingKontakBendahara', s.kontak_bendahara || '6281298765432');
+
+    this.openModal('modalPengaturanKas');
+    if (window.lucide) lucide.createIcons();
+  },
+
+  async submitSettings(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const body = Object.fromEntries(formData.entries());
+
+    const btn = document.getElementById('btnSubmitSettings');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch('api/settings.php?action=update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast(data.message, 'success');
+        this.closeModal('modalPengaturanKas');
+        await this.loadSettings();
+        this.loadDashboard();
+      } else {
+        this.showToast(data.message || 'Gagal menyimpan pengaturan.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   },
 
   // 11. Toast Utility

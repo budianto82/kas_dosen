@@ -25,7 +25,14 @@ switch ($action) {
             'nama_bank', 'nomor_rekening', 'atas_nama', 'kontak_bendahara', 'nama_bendahara'
         ];
 
-        $stmt = $pdo->prepare("INSERT OR REPLACE INTO pengaturan (setting_key, setting_value) VALUES (?, ?)");
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $pdo->prepare("INSERT INTO pengaturan (setting_key, setting_value) VALUES (?, ?) ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value");
+        } elseif ($driver === 'mysql') {
+            $stmt = $pdo->prepare("INSERT INTO pengaturan (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        } else {
+            $stmt = $pdo->prepare("INSERT OR REPLACE INTO pengaturan (setting_key, setting_value) VALUES (?, ?)");
+        }
 
         foreach ($input as $key => $val) {
             if (in_array($key, $allowedKeys)) {

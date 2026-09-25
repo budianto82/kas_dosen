@@ -198,6 +198,33 @@ body {
   transform: translateY(0);
 }
 
+/* Center Dialog Modal (e.g. Form Login) */
+.modal-overlay.modal-centered {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px;
+}
+
+.modal-dialog {
+  background-color: #FFFFFF;
+  width: 100%;
+  max-width: 410px;
+  max-height: 90vh;
+  border-radius: 20px;
+  padding: 24px 20px;
+  overflow-y: auto;
+  margin: auto;
+  transform: scale(0.92) translateY(12px);
+  opacity: 0;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.modal-overlay.active .modal-dialog {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
 .sheet-handle {
   width: 40px;
   height: 5px;

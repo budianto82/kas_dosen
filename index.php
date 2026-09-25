@@ -468,9 +468,8 @@ $pdo = getDBConnection();
   <!-- ==================== MODALS (BOTTOM SHEETS) ==================== -->
 
   <!-- Modal 1: Login -->
-  <div id="modalLogin" class="modal-overlay">
-    <div class="modal-sheet">
-      <div class="sheet-handle"></div>
+  <div id="modalLogin" class="modal-overlay modal-centered">
+    <div class="modal-dialog">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2.5">
           <img src="assets/img/logo_unpam.png" alt="UNPAM" class="w-8 h-8 object-contain">

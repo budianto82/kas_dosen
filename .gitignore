@@ -1,0 +1,10 @@
+# Local environment & temporary files
+.env
+.DS_Store
+Thumbs.db
+*.log
+database/*.db
+
+# Uploads directory (handled separately)
+uploads/*
+!uploads/.gitkeep

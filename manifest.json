@@ -1,0 +1,25 @@
+{
+  "name": "Kas Dosen SI UNPAM",
+  "short_name": "Kas Dosen SI",
+  "description": "Aplikasi Kas Dosen Program Studi Sistem Informasi Universitas Pamulang",
+  "start_url": "./index.php",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B2F64",
+  "theme_color": "#0B2F64",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "education"]
+}

@@ -3,12 +3,6 @@
   "functions": {
     "api/*.php": {
       "runtime": "vercel-php@0.7.3"
-    },
-    "index.php": {
-      "runtime": "vercel-php@0.7.3"
-    },
-    "cetak_laporan.php": {
-      "runtime": "vercel-php@0.7.3"
     }
   },
   "routes": [
@@ -25,16 +19,16 @@
       "dest": "/sw.js"
     },
     {
+      "src": "/cetak_laporan.php",
+      "dest": "/api/cetak_laporan.php"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
     {
-      "src": "/cetak_laporan.php",
-      "dest": "/cetak_laporan.php"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/index.php"
+      "dest": "/api/index.php"
     }
   ]
 }

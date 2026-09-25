@@ -34,10 +34,13 @@ switch ($action) {
                 $user['foto'] = $stmtFoto->fetchColumn() ?: null;
             }
             $_SESSION['user'] = $user;
+            $token = generateAuthToken($user);
+            setcookie('kas_token', $token, time() + (86400 * 30), '/', '', false, false);
             jsonResponse([
                 'status' => 'success',
                 'message' => 'Login berhasil! Selamat datang, ' . $user['nama'],
-                'user' => $user
+                'user' => $user,
+                'token' => $token
             ]);
         }
 
@@ -60,10 +63,13 @@ switch ($action) {
                 'foto' => $dosen['foto'] ?? null
             ];
             $_SESSION['user'] = $userSession;
+            $token = generateAuthToken($userSession);
+            setcookie('kas_token', $token, time() + (86400 * 30), '/', '', false, false);
             jsonResponse([
                 'status' => 'success',
                 'message' => $role === 'bendahara' ? 'Login berhasil sebagai Bendahara!' : 'Login berhasil sebagai Dosen (Mode Lihat)!',
-                'user' => $userSession
+                'user' => $userSession,
+                'token' => $token
             ]);
         }
 
@@ -72,12 +78,13 @@ switch ($action) {
 
     case 'logout':
         session_destroy();
+        setcookie('kas_token', '', time() - 3600, '/');
         jsonResponse(['status' => 'success', 'message' => 'Anda telah berhasil keluar.']);
         break;
 
     case 'check':
-        if (isset($_SESSION['user'])) {
-            $u = $_SESSION['user'];
+        $u = getAuthUser();
+        if ($u) {
             if (!empty($u['nidn'])) {
                 $stmtRef = $pdo->prepare("SELECT foto, nama, gelar FROM dosen WHERE nidn = ?");
                 $stmtRef->execute([$u['nidn']]);

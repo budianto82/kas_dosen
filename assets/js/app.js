@@ -3,6 +3,24 @@
  * Program Studi Sistem Informasi - Universitas Pamulang
  */
 
+// Intercept all fetch requests to automatically attach authentication token
+const originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  options = options || {};
+  const token = localStorage.getItem('kas_token');
+  if (token) {
+    if (!options.headers) {
+      options.headers = {};
+    }
+    if (options.headers instanceof Headers) {
+      options.headers.set('Authorization', `Bearer ${token}`);
+    } else if (typeof options.headers === 'object') {
+      options.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return originalFetch(url, options);
+};
+
 const App = {
   state: {
     currentTab: 'beranda',
@@ -229,6 +247,9 @@ const App = {
       if (data.status === 'success') {
         this.showToast(data.message, 'success');
         this.state.user = data.user;
+        if (data.token) {
+          localStorage.setItem('kas_token', data.token);
+        }
         this.closeModal('modalLogin');
         this.updateUserUI();
         this.switchTab('beranda');
@@ -246,6 +267,7 @@ const App = {
     if (!confirm('Apakah Anda yakin ingin keluar?')) return;
     try {
       await fetch('api/auth.php?action=logout');
+      localStorage.removeItem('kas_token');
       this.state.user = null;
       this.updateUserUI();
       this.showToast('Berhasil keluar.', 'success');

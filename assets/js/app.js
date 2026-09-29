@@ -612,11 +612,15 @@ const App = {
 
     const bulanHeaders = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
+    const nominalIuran = (this.state.settings && this.state.settings.nominal_iuran_bulanan)
+      ? this.formatRupiah(this.state.settings.nominal_iuran_bulanan)
+      : 'Rp 20.000';
+
     let html = `
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-4">
         <div class="flex items-center justify-between mb-3">
           <div class="text-xs font-bold text-slate-800">Matriks Iuran Dosen SI (${data.tahun})</div>
-          <div class="text-[11px] text-slate-500">Iuran: Rp 30.000 / bln</div>
+          <div class="text-[11px] text-slate-500 font-semibold text-blue-900">Iuran: ${nominalIuran} / bln</div>
         </div>
 
         <div class="matrix-scroll">
@@ -903,10 +907,22 @@ const App = {
         this.state.dosenList = data.data;
         this.renderDosenList(data.data);
         this.populateDosenSelects(data.data);
+      } else {
+        container.innerHTML = `
+          <div class="text-center py-6 text-xs text-slate-500 space-y-2">
+            <p class="text-rose-500 font-semibold">${data.message || 'Gagal memuat data dosen.'}</p>
+            <button onclick="App.loadDosenList()" class="px-3 py-1 bg-blue-900 hover:bg-blue-950 text-white rounded-lg text-[11px] font-bold transition-colors">Coba Lagi</button>
+          </div>
+        `;
       }
     } catch (err) {
       console.error(err);
-      container.innerHTML = '<div class="text-center py-8 text-xs text-rose-500">Gagal memuat data dosen.</div>';
+      container.innerHTML = `
+        <div class="text-center py-6 text-xs text-slate-500 space-y-2">
+          <p class="text-rose-500 font-semibold">Gagal memuat data dosen.</p>
+          <button onclick="App.loadDosenList()" class="px-3 py-1 bg-blue-900 hover:bg-blue-950 text-white rounded-lg text-[11px] font-bold transition-colors">Coba Lagi</button>
+        </div>
+      `;
     }
   },
 
@@ -1340,7 +1356,7 @@ const App = {
 
     // Update info rekening & tarif dari pengaturan
     const settings = this.state.settings || {};
-    const tarif = settings.nominal_iuran_bulanan ? this.formatRupiah(settings.nominal_iuran_bulanan) + ' / bln' : 'Rp 30.000 / bln';
+    const tarif = settings.nominal_iuran_bulanan ? this.formatRupiah(settings.nominal_iuran_bulanan) + ' / bln' : 'Rp 20.000 / bln';
     const badge = document.getElementById('kirimTfNominalBadge');
     if (badge) badge.textContent = tarif;
     const bankRek = document.getElementById('kirimTfBankRek');
@@ -1579,10 +1595,49 @@ const App = {
       const data = await res.json();
       if (data.status === 'success') {
         this.state.settings = data.data || {};
+        this.applySettingsToUI();
       }
     } catch (err) {
       console.error('Error load settings:', err);
     }
+  },
+
+  applySettingsToUI() {
+    const s = this.state.settings || {};
+    const nominal = s.nominal_iuran_bulanan ? parseInt(s.nominal_iuran_bulanan) : 20000;
+    const nominalFormatted = this.formatRupiah(nominal);
+
+    // Update badge tarif di modal transfer / rekening
+    const rekBadge = document.getElementById('modalRekeningNominalBadge');
+    if (rekBadge) rekBadge.textContent = `${nominalFormatted} / bln`;
+
+    // Update input nominal default di form catat iuran
+    const formNominal = document.getElementById('formIuranNominal');
+    if (formNominal && (!formNominal.value || formNominal.value === '30000')) {
+      formNominal.value = nominal;
+    }
+
+    // Update badge di modal kirim bukti transfer
+    const tfBadge = document.getElementById('kirimTfNominalBadge');
+    if (tfBadge) tfBadge.textContent = `${nominalFormatted} / bln`;
+
+    // Update data bank & rekening
+    if (s.nama_bank) {
+      const titleEl = document.getElementById('modalBankTitle');
+      if (titleEl) titleEl.innerHTML = `<i data-lucide="credit-card" class="w-4 h-4"></i> Transfer Bank (${s.nama_bank})`;
+      const labelEl = document.getElementById('modalBankLabel');
+      if (labelEl) labelEl.textContent = `Nomor Rekening ${s.nama_bank}:`;
+    }
+    if (s.nomor_rekening) {
+      const rekEl = document.getElementById('rekeningModalText');
+      if (rekEl) rekEl.textContent = s.nomor_rekening;
+    }
+    if (s.atas_nama) {
+      const anEl = document.getElementById('modalAtasNamaText');
+      if (anEl) anEl.textContent = `a.n. ${s.atas_nama}`;
+    }
+
+    if (window.lucide) lucide.createIcons();
   },
 
   openSettingsModal() {
@@ -1598,7 +1653,7 @@ const App = {
       if (el) el.value = val || '';
     };
 
-    setVal('settingNominalIuran', s.nominal_iuran_bulanan || 30000);
+    setVal('settingNominalIuran', s.nominal_iuran_bulanan || 20000);
     setVal('settingNamaBank', s.nama_bank || 'Bank BTN');
     setVal('settingNoRek', s.nomor_rekening || '4401500586720');
     setVal('settingAtasNama', s.atas_nama || 'Ayu Ernawati, S.Kom., M.Kom.');
@@ -1630,6 +1685,7 @@ const App = {
         this.closeModal('modalPengaturanKas');
         await this.loadSettings();
         this.loadDashboard();
+        this.loadIuranMatrix();
       } else {
         this.showToast(data.message || 'Gagal menyimpan pengaturan.', 'error');
       }

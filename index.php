@@ -57,30 +57,29 @@ $pdo = getDBConnection();
     </div>
 
     <!-- App Header -->
-    <header class="app-header px-4 pt-4 pb-4 sticky top-0 z-30 shadow-sm">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
+    <header class="app-header px-3 py-2.5 sm:px-4 sm:py-3.5 sticky top-0 z-30 shadow-sm">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
           <!-- Logo Lambang UNPAM Resmi -->
-          <div class="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0 border border-amber-400/40">
+          <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0 border border-amber-400/40">
             <img src="assets/img/logo_unpam.png" alt="Logo UNPAM" class="w-full h-full object-contain">
           </div>
-          <div>
-            <h1 class="text-xs font-extrabold text-white tracking-wide uppercase">KAS DOSEN SISTEM INFORMASI</h1>
-            <p class="text-[10px] text-amber-300 font-medium">Universitas Pamulang</p>
-            <p class="text-[10px] text-slate-200 font-medium">Ruang R2</p>
+          <div class="min-w-0">
+            <h1 class="text-[11px] sm:text-xs font-black text-white tracking-tight uppercase truncate">KAS DOSEN PRODI SI</h1>
+            <p class="text-[9px] sm:text-[10px] text-amber-300 font-medium truncate leading-tight">Universitas Pamulang • Ruang R2</p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <!-- Avatar Foto Profil User -->
-          <div id="userHeaderAvatar" class="w-9 h-9 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer hidden" onclick="App.switchTab('dosen')" title="Lihat Profil Dosen">
+          <div id="userHeaderAvatar" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer hidden" onclick="App.switchTab('dosen')" title="Lihat Profil Dosen">
             <!-- Rendered by JS -->
           </div>
-          <div class="text-right cursor-pointer" onclick="App.state.user ? App.switchTab('dosen') : App.openModal('modalLogin')" title="Klik untuk profil / login">
+          <div class="text-right cursor-pointer hidden md:block" onclick="App.state.user ? App.switchTab('dosen') : App.openModal('modalLogin')" title="Klik untuk profil / login">
             <span id="userRoleBadge" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider bg-white/20 text-white">
               MEMUAT...
             </span>
-            <div id="userNameDisplay" class="text-[11px] text-white font-bold max-w-[140px] truncate">
+            <div id="userNameDisplay" class="text-[11px] text-white font-bold max-w-[130px] truncate">
               Tamu
             </div>
           </div>
@@ -538,7 +537,7 @@ $pdo = getDBConnection();
             <span id="modalBankTitle" class="font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
               <i data-lucide="credit-card" class="w-4 h-4"></i> Transfer Bank (BTN)
             </span>
-            <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Rp 30.000 / bln</span>
+            <span id="modalRekeningNominalBadge" class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Rp 20.000 / bln</span>
           </div>
 
           <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/10 flex items-center justify-between">
@@ -617,7 +616,7 @@ $pdo = getDBConnection();
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal per Bulan *</label>
-            <input type="number" name="nominal" value="30000" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <input type="number" name="nominal" id="formIuranNominal" value="20000" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
         </div>
 
@@ -849,7 +848,7 @@ $pdo = getDBConnection();
       <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl mb-3 text-xs space-y-1">
         <div class="flex items-center justify-between text-[11px] font-bold text-blue-900">
           <span>Rekening Tujuan:</span>
-          <span id="kirimTfNominalBadge" class="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[10px] font-mono">Rp 30.000 / bln</span>
+          <span id="kirimTfNominalBadge" class="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[10px] font-mono">Rp 20.000 / bln</span>
         </div>
         <div class="font-mono text-slate-800 font-bold" id="kirimTfBankRek">Bank BTN: 4401500586720</div>
         <div class="text-[11px] text-slate-600" id="kirimTfAtasNama">a.n. Ayu Ernawati, S.Kom., M.Kom.</div>
@@ -935,7 +934,7 @@ $pdo = getDBConnection();
         <!-- Nominal Iuran Bulanan -->
         <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl">
           <label class="block text-xs font-bold text-amber-900 mb-1">Tarif Iuran Bulanan per Dosen (Rp) *</label>
-          <input type="number" id="settingNominalIuran" name="nominal_iuran_bulanan" required placeholder="30000" class="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          <input type="number" id="settingNominalIuran" name="nominal_iuran_bulanan" required placeholder="20000" class="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-blue-900 focus:outline-none">
           <span class="text-[10px] text-amber-700 mt-1 block">Nominal ini otomatis dipakai saat dosen mengirim bukti dan validasi iuran.</span>
         </div>
 

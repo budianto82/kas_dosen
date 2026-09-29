@@ -135,7 +135,7 @@ switch ($action) {
         $dosenId = (int)($input['dosen_id'] ?? 0);
         $bulanList = $input['bulan'] ?? []; // bisa array bulan jika bayar borongan
         $tahun = (int)($input['tahun'] ?? date('Y'));
-        $nominalPerBulan = (float)($input['nominal'] ?? 30000);
+        $nominalPerBulan = (float)($input['nominal'] ?? ($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 20000));
         $tanggalBayar = $input['tanggal_bayar'] ?? date('Y-m-d');
         $metodeBayar = $input['metode_bayar'] ?? 'transfer';
         $keterangan = trim($input['keterangan'] ?? '');
@@ -209,8 +209,8 @@ switch ($action) {
             jsonResponse(['status' => 'error', 'message' => 'Foto bukti transfer wajib dilampirkan.'], 400);
         }
 
-        // Ambil tarif iuran bulanan dari pengaturan (default 30000)
-        $tarifIuran = (float)($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 30000);
+        // Ambil tarif iuran bulanan dari pengaturan (default 20000)
+        $tarifIuran = (float)($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 20000);
 
         // Cek apakah sudah pernah bayar pada periode ini
         $stmtCheck = $pdo->prepare("SELECT id, status FROM iuran WHERE dosen_id = ? AND bulan = ? AND tahun = ?");
@@ -307,7 +307,7 @@ switch ($action) {
         }
 
         $pengaturan = $pdo->query("SELECT setting_key, setting_value FROM pengaturan")->fetchAll(PDO::FETCH_KEY_PAIR);
-        $nominal = formatRupiah((float)($pengaturan['nominal_iuran_bulanan'] ?? 30000));
+        $nominal = formatRupiah((float)($pengaturan['nominal_iuran_bulanan'] ?? 20000));
         $namaBulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][$bulan - 1];
 
         $pesan = "Assalamu'alaikum Wr. Wb.\n"

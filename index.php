@@ -733,25 +733,13 @@ $pdo = getDBConnection();
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap (tanpa gelar) *</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap *</label>
           <input type="text" name="nama" required placeholder="Contoh: Muhammad Ilham" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">No. WhatsApp (Opsional)</label>
-            <input type="text" name="no_hp" placeholder="08123456789" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Jabatan di Prodi</label>
-            <input type="text" name="jabatan" value="Dosen Tetap" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Email Kampus (Opsional)</label>
-          <input type="email" name="email" placeholder="dosen@unpam.ac.id" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-        </div>
+        <input type="hidden" name="jabatan" value="Dosen Tetap">
+        <input type="hidden" name="no_hp" value="">
+        <input type="hidden" name="email" value="">
 
         <button type="submit" class="w-full py-2.5 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-950 transition-colors shadow-md mt-2">
           Tambahkan Dosen

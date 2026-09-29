@@ -32,6 +32,7 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transition: filter 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s ease;
 }
 
 @media (max-width: 640px) {
@@ -298,3 +299,39 @@ body {
   background: #CBD5E1;
   border-radius: 4px;
 }
+
+/* ========================================================
+   Auth Lock / Gated Mode (Dashboard Samar Sebelum Login)
+   ======================================================== */
+body.auth-locked {
+  overflow: hidden !important;
+  height: 100vh !important;
+}
+
+body.auth-locked .mobile-wrapper {
+  filter: blur(14px) brightness(0.85) grayscale(20%);
+  -webkit-filter: blur(14px) brightness(0.85) grayscale(20%);
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transform: scale(0.985);
+}
+
+body.auth-locked #modalLogin {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  background-color: rgba(7, 31, 66, 0.72) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+body.auth-locked #modalLogin .modal-dialog {
+  transform: scale(1) translateY(0) !important;
+  opacity: 1 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15) !important;
+}
+
+body.auth-locked .btn-close-login {
+  display: none !important;
+}
+

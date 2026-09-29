@@ -38,17 +38,42 @@ const App = {
   init() {
     this.registerServiceWorker();
     this.setupInstallPrompt();
+    if (!localStorage.getItem('kas_token')) {
+      this.setAuthGated(true);
+    }
     this.checkSession();
     this.bindEvents();
+  },
+
+  // Kontrol Tampilan Terkunci (Dashboard Samar Sebelum Login)
+  setAuthGated(isGated) {
+    const loginModal = document.getElementById('modalLogin');
+    if (isGated) {
+      document.body.classList.add('auth-locked');
+      if (loginModal) {
+        loginModal.classList.add('active');
+      }
+      // Pastikan modal lain ditutup
+      document.querySelectorAll('.modal-overlay:not(#modalLogin)').forEach(m => m.classList.remove('active'));
+      setTimeout(() => {
+        const userInput = document.querySelector('#modalLogin input[name="username"]');
+        if (userInput && document.activeElement !== userInput) userInput.focus();
+      }, 350);
+    } else {
+      document.body.classList.remove('auth-locked');
+      if (loginModal) {
+        loginModal.classList.remove('active');
+      }
+    }
   },
 
   // 1. PWA Service Worker & Install Banner
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=8')
+      navigator.serviceWorker.register('./sw.js?v=9')
         .then((reg) => {
           reg.update();
-          console.log('PWA Service Worker v8 terdaftar.');
+          console.log('PWA Service Worker v9 terdaftar.');
         })
         .catch(err => console.log('SW registration failed:', err));
     }
@@ -84,8 +109,10 @@ const App = {
       const data = await res.json();
       if (data.status === 'success' && data.logged_in) {
         this.state.user = data.user;
+        this.setAuthGated(false);
       } else {
         this.state.user = null;
+        this.setAuthGated(true);
       }
       this.updateUserUI();
       // Load all data concurrently for high performance
@@ -97,6 +124,9 @@ const App = {
       ]);
     } catch (err) {
       console.error('Check session error:', err);
+      if (!this.state.user) {
+        this.setAuthGated(true);
+      }
       this.loadDashboard();
     }
   },
@@ -274,7 +304,7 @@ const App = {
         if (data.token) {
           localStorage.setItem('kas_token', data.token);
         }
-        this.closeModal('modalLogin');
+        this.setAuthGated(false);
         this.updateUserUI();
         this.switchTab('beranda');
         this.loadDashboard();
@@ -304,20 +334,21 @@ const App = {
     document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
 
     // Pindahkan tab ke beranda di latar belakang
-    this.switchTab('beranda');
+    this.state.currentTab = 'beranda';
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      if (pane.id === 'tab-beranda') {
+        pane.classList.remove('hidden');
+      } else {
+        pane.classList.add('hidden');
+      }
+    });
 
     // Kosongkan input form login sebelumnya
     const loginForm = document.querySelector('#modalLogin form');
     if (loginForm) loginForm.reset();
 
-    // Langsung buka form login di layar
-    this.openModal('modalLogin');
-
-    // Auto-fokus ke input username/NIDOS setelah animasi modal
-    setTimeout(() => {
-      const userInput = document.querySelector('#modalLogin input[name="username"]');
-      if (userInput) userInput.focus();
-    }, 350);
+    // Kunci kembali ke mode login & blur dashboard
+    this.setAuthGated(true);
 
     this.showToast('Anda telah keluar. Silakan masuk kembali.', 'info');
 
@@ -328,6 +359,10 @@ const App = {
 
   // 3. Tab Navigation
   switchTab(tabId) {
+    if (document.body.classList.contains('auth-locked') || !this.state.user) {
+      this.setAuthGated(true);
+      return;
+    }
     this.state.currentTab = tabId;
 
     // Update Bottom Nav Styling
@@ -364,17 +399,34 @@ const App = {
     // Nav Click
     document.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', () => {
+        if (document.body.classList.contains('auth-locked') || !this.state.user) {
+          this.setAuthGated(true);
+          return;
+        }
         this.switchTab(item.dataset.tab);
       });
     });
 
-    // Click outside modal to close
+    // Click outside modal to close (abaikan modalLogin jika belum login)
     document.querySelectorAll('.modal-overlay').forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
+          if (modal.id === 'modalLogin' && (!this.state.user || document.body.classList.contains('auth-locked'))) {
+            return;
+          }
           modal.classList.remove('active');
         }
       });
+    });
+
+    // ESC key untuk menutup modal aktif (kecuali jika terkunci belum login)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (document.body.classList.contains('auth-locked')) return;
+        document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+          modal.classList.remove('active');
+        });
+      }
     });
   },
 
@@ -1014,6 +1066,9 @@ const App = {
   },
 
   closeModal(modalId) {
+    if (modalId === 'modalLogin' && (!this.state.user || document.body.classList.contains('auth-locked'))) {
+      return;
+    }
     const modal = document.getElementById(modalId);
     if (modal) {
       modal.classList.remove('active');

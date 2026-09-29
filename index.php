@@ -4,7 +4,10 @@
  * Program Studi Sistem Informasi - Universitas Pamulang
  */
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/config/helper.php';
 $pdo = getDBConnection();
+$authUser = getAuthUser();
+$isLoggedIn = !empty($authUser);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -40,7 +43,7 @@ $pdo = getDBConnection();
   <!-- Custom Styles -->
   <link rel="stylesheet" href="assets/css/style.css?v=<?= time() ?>">
 </head>
-<body>
+<body class="<?= $isLoggedIn ? '' : 'auth-locked' ?>">
 
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none w-11/12 max-w-sm"></div>
@@ -462,9 +465,9 @@ $pdo = getDBConnection();
   <!-- ==================== MODALS (BOTTOM SHEETS) ==================== -->
 
   <!-- Modal 1: Login -->
-  <div id="modalLogin" class="modal-overlay modal-centered">
+  <div id="modalLogin" class="modal-overlay modal-centered <?= $isLoggedIn ? '' : 'active' ?>">
     <div class="modal-dialog">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2.5">
           <img src="assets/img/logo_unpam.png" alt="UNPAM" class="w-8 h-8 object-contain">
           <div>
@@ -472,10 +475,21 @@ $pdo = getDBConnection();
             <p class="text-[10px] text-slate-500">Sistem Informasi Universitas Pamulang</p>
           </div>
         </div>
-        <button onclick="App.closeModal('modalLogin')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100" title="Tutup">
+        <button onclick="App.closeModal('modalLogin')" class="btn-close-login text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100" title="Tutup">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
+
+      <!-- Notice Akses Terkunci Sebelum Login -->
+      <div class="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 mb-3.5 flex items-center gap-2.5 shadow-sm">
+        <div class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center flex-shrink-0 text-xs shadow-sm">
+          <i data-lucide="lock" class="w-4 h-4"></i>
+        </div>
+        <div class="text-[11px] text-amber-950 font-medium leading-tight">
+          Silakan <strong>masuk dengan NIDOS</strong> Anda untuk membuka dan melihat dashboard kas.
+        </div>
+      </div>
+
       <form onsubmit="App.login(event)" class="space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Username / NIDOS Dosen</label>
@@ -486,12 +500,13 @@ $pdo = getDBConnection();
           <input type="password" name="password" required placeholder="Kata sandi akun" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
         </div>
         <div class="p-2.5 bg-blue-50 text-blue-900 rounded-xl text-[11px] leading-relaxed">
-          💡 <strong>Info Login Dosen:</strong><br>
+          💡 <strong>Petunjuk Login Dosen:</strong><br>
           Gunakan <strong>NIDOS</strong> Anda sebagai Username.<br>
           <span class="text-[10px] text-slate-600">(Password default: NIDOS Anda atau <code>unpam123</code>)</span>
         </div>
-        <button type="submit" class="w-full py-2.5 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-950 transition-colors shadow-md">
-          Masuk Sekarang
+        <button type="submit" class="w-full py-2.5 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-950 transition-colors shadow-md flex items-center justify-center gap-1.5">
+          <i data-lucide="log-in" class="w-4 h-4"></i>
+          <span>Masuk Sekarang</span>
         </button>
       </form>
     </div>

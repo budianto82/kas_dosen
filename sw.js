@@ -1,9 +1,9 @@
 /**
  * Service Worker for Kas Dosen UNPAM Mobile App
- * Version 8 - Network-First for Navigation (No more stale HTML/JS caching)
+ * Version 9 - Network-First for Navigation (No more stale HTML/JS caching)
  */
 
-const CACHE_NAME = 'kas-dosen-v8';
+const CACHE_NAME = 'kas-dosen-v9';
 const STATIC_ASSETS = [
   './manifest.json',
   './assets/img/logo_unpam.png',

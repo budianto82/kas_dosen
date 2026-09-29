@@ -45,8 +45,11 @@ const App = {
   // 1. PWA Service Worker & Install Banner
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('PWA Service Worker terdaftar.'))
+      navigator.serviceWorker.register('./sw.js?v=8')
+        .then((reg) => {
+          reg.update();
+          console.log('PWA Service Worker v8 terdaftar.');
+        })
         .catch(err => console.log('SW registration failed:', err));
     }
   },

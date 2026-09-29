@@ -23,6 +23,9 @@ $pdo = getDBConnection();
   <meta name="apple-mobile-web-app-title" content="Kas Dosen SI">
   <link rel="icon" type="image/png" href="assets/img/logo_unpam.png">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 
   <!-- Google Fonts & Tailwind CDN -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,7 +38,7 @@ $pdo = getDBConnection();
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/style.css?v=<?= time() ?>">
 </head>
 <body>
 
@@ -57,36 +60,28 @@ $pdo = getDBConnection();
     </div>
 
     <!-- App Header -->
-    <header class="app-header px-3 py-2.5 sm:px-4 sm:py-3.5 sticky top-0 z-30 shadow-sm">
-      <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-          <!-- Logo Lambang UNPAM Resmi -->
-          <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0 border border-amber-400/40">
+    <header class="app-header px-3.5 py-3 sticky top-0 z-30 shadow-md">
+      <div class="flex items-center justify-between gap-2 max-w-full">
+        <!-- Logo & Judul Prodi -->
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <div class="w-9 h-9 rounded-xl bg-white p-1 flex items-center justify-center shadow flex-shrink-0 border border-amber-400/40">
             <img src="assets/img/logo_unpam.png" alt="Logo UNPAM" class="w-full h-full object-contain">
           </div>
-          <div class="min-w-0">
-            <h1 class="text-[11px] sm:text-xs font-black text-white tracking-tight uppercase truncate">KAS DOSEN PRODI SI</h1>
-            <p class="text-[9px] sm:text-[10px] text-amber-300 font-medium truncate leading-tight">Universitas Pamulang • Ruang R2</p>
+          <div class="min-w-0 flex-1 overflow-hidden">
+            <h1 class="text-xs font-black text-white tracking-wide uppercase truncate leading-tight">KAS DOSEN SI UNPAM</h1>
+            <p class="text-[10px] text-amber-300 font-semibold truncate leading-tight">Prodi Sistem Informasi • R2</p>
           </div>
         </div>
 
-        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          <!-- Avatar Foto Profil User -->
-          <div id="userHeaderAvatar" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer hidden" onclick="App.switchTab('dosen')" title="Lihat Profil Dosen">
+        <!-- Tombol Aksi & Avatar -->
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <div id="userHeaderAvatar" class="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer hidden" onclick="App.switchTab('dosen')" title="Lihat Profil Dosen">
             <!-- Rendered by JS -->
           </div>
-          <div class="text-right cursor-pointer hidden md:block" onclick="App.state.user ? App.switchTab('dosen') : App.openModal('modalLogin')" title="Klik untuk profil / login">
-            <span id="userRoleBadge" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider bg-white/20 text-white">
-              MEMUAT...
-            </span>
-            <div id="userNameDisplay" class="text-[11px] text-white font-bold max-w-[130px] truncate">
-              Tamu
-            </div>
-          </div>
-          <button id="btnSettingsAction" onclick="App.openSettingsModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0 hidden" title="Pengaturan Kas (Bendahara)">
+          <button id="btnSettingsAction" onclick="App.openSettingsModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all flex-shrink-0 hidden" title="Pengaturan Kas (Bendahara)">
             <i data-lucide="settings" class="w-4 h-4"></i>
           </button>
-          <button id="authActionBtn" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0" title="Login / Logout">
+          <button id="authActionBtn" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all flex-shrink-0" title="Login / Logout">
             <i data-lucide="log-in" class="w-4 h-4"></i>
           </button>
         </div>

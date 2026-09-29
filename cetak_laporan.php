@@ -237,7 +237,7 @@ $pengaturan = $pdo->query("SELECT setting_key, setting_value FROM pengaturan")->
       <div class="ttd-col">
         <p>Mengetahui,<br><strong>Ketua Program Studi Sistem Informasi</strong></p>
         <div class="ttd-space"></div>
-        <p><u>Dr. Ir. Ahmad Sudrajat, M.Kom.</u><br>NIDN: 0408037501</p>
+        <p><u>Dr. Ir. Ahmad Sudrajat, M.Kom.</u><br>NIDOS: 0408037501</p>
       </div>
       <div class="ttd-col">
         <p>Pamulang, <?= date('d F Y') ?><br><strong>Bendahara Kas Dosen</strong></p>

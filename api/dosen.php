@@ -48,8 +48,8 @@ switch ($action) {
             $d['lunas_bulan_ini'] = (int)$d['status_bulan_ini'] > 0;
             $d['total_kontribusi_formatted'] = formatRupiah($d['total_kontribusi']);
             // Nomor WA yang siap dipakai wa.me
-            $cleanPhone = preg_replace('/[^0-9]/', '', $d['no_hp']);
-            if (str_starts_with($cleanPhone, '0')) {
+            $cleanPhone = preg_replace('/[^0-9]/', '', (string)($d['no_hp'] ?? ''));
+            if (!empty($cleanPhone) && str_starts_with($cleanPhone, '0')) {
                 $cleanPhone = '62' . substr($cleanPhone, 1);
             }
             $d['wa_phone'] = $cleanPhone;
@@ -103,15 +103,15 @@ switch ($action) {
         $email = trim($input['email'] ?? '');
         $jabatan = trim($input['jabatan'] ?? 'Dosen Tetap');
 
-        if (empty($nidn) || empty($nama) || empty($no_hp)) {
-            jsonResponse(['status' => 'error', 'message' => 'NIDN, Nama, dan No. WhatsApp wajib diisi.'], 400);
+        if (empty($nidn) || empty($nama)) {
+            jsonResponse(['status' => 'error', 'message' => 'NIDOS dan Nama Lengkap wajib diisi.'], 400);
         }
 
-        // Cek duplikasi NIDN
+        // Cek duplikasi NIDOS
         $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM dosen WHERE nidn = ?");
         $stmtCheck->execute([$nidn]);
         if ($stmtCheck->fetchColumn() > 0) {
-            jsonResponse(['status' => 'error', 'message' => 'Dosen dengan NIDN ini sudah terdaftar.'], 400);
+            jsonResponse(['status' => 'error', 'message' => 'Dosen dengan NIDOS ini sudah terdaftar.'], 400);
         }
 
         $stmt = $pdo->prepare("INSERT INTO dosen (nidn, nama, gelar, no_hp, email, jabatan, status) VALUES (?, ?, ?, ?, ?, ?, 'aktif')");
@@ -134,7 +134,7 @@ switch ($action) {
         $status = trim($input['status'] ?? 'aktif');
 
         if (!$id || empty($nidn) || empty($nama)) {
-            jsonResponse(['status' => 'error', 'message' => 'Data tidak lengkap.'], 400);
+            jsonResponse(['status' => 'error', 'message' => 'NIDOS dan Nama Lengkap wajib diisi.'], 400);
         }
 
         $stmt = $pdo->prepare("UPDATE dosen SET nidn = ?, nama = ?, gelar = ?, no_hp = ?, email = ?, jabatan = ?, status = ? WHERE id = ?");

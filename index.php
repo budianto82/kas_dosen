@@ -422,7 +422,7 @@ $pdo = getDBConnection();
         <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex items-center gap-2">
           <div class="relative flex-1">
             <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="searchDosenInput" oninput="App.loadDosenList()" placeholder="Cari Nama / NIDN Dosen..." class="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-900">
+            <input type="text" id="searchDosenInput" oninput="App.loadDosenList()" placeholder="Cari Nama / NIDOS Dosen..." class="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-900">
           </div>
           <button id="btnTambahDosen" onclick="App.openModal('modalTambahDosen')" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-950 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 flex-shrink-0 shadow-sm transition-all hidden" title="Tambah Dosen Baru">
             <i data-lucide="user-plus" class="w-4 h-4"></i>
@@ -484,8 +484,8 @@ $pdo = getDBConnection();
       </div>
       <form onsubmit="App.login(event)" class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Username / NIDN Dosen</label>
-          <input type="text" name="username" required placeholder="Masukkan NIDN / NIDOS Anda" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Username / NIDOS Dosen</label>
+          <input type="text" name="username" required placeholder="Masukkan NIDOS Anda" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kata Sandi (Password)</label>
@@ -493,8 +493,8 @@ $pdo = getDBConnection();
         </div>
         <div class="p-2.5 bg-blue-50 text-blue-900 rounded-xl text-[11px] leading-relaxed">
           💡 <strong>Info Login Dosen:</strong><br>
-          Gunakan <strong>NIDN / NIDOS</strong> Anda sebagai Username.<br>
-          <span class="text-[10px] text-slate-600">(Password default: NIDN/NIDOS Anda atau <code>unpam123</code>)</span>
+          Gunakan <strong>NIDOS</strong> Anda sebagai Username.<br>
+          <span class="text-[10px] text-slate-600">(Password default: NIDOS Anda atau <code>unpam123</code>)</span>
         </div>
         <button type="submit" class="w-full py-2.5 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-950 transition-colors shadow-md">
           Masuk Sekarang
@@ -723,11 +723,11 @@ $pdo = getDBConnection();
       <form onsubmit="App.submitTambahDosen(event)" class="space-y-3">
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">NIDN / NIDK *</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">NIDOS *</label>
             <input type="text" name="nidn" required placeholder="0412345678" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Gelar</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Gelar (Opsional)</label>
             <input type="text" name="gelar" placeholder="M.Kom. / Ph.D" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
         </div>
@@ -739,8 +739,8 @@ $pdo = getDBConnection();
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">No. WhatsApp *</label>
-            <input type="text" name="no_hp" required placeholder="08123456789" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">No. WhatsApp (Opsional)</label>
+            <input type="text" name="no_hp" placeholder="08123456789" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Jabatan di Prodi</label>

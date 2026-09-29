@@ -322,12 +322,14 @@ switch ($action) {
                . "Mohon konfirmasi bukti transfer via aplikasi kas dosen atau membalas pesan ini. Terima kasih atas partisipasi dan kebersamaannya 🙏.\n\n"
                . "Salam hangat,\n*Bendahara Kas Dosen SI UNPAM*";
 
-        $cleanPhone = preg_replace('/[^0-9]/', '', $dosen['no_hp']);
-        if (str_starts_with($cleanPhone, '0')) {
+        $cleanPhone = preg_replace('/[^0-9]/', '', (string)($dosen['no_hp'] ?? ''));
+        if (!empty($cleanPhone) && str_starts_with($cleanPhone, '0')) {
             $cleanPhone = '62' . substr($cleanPhone, 1);
         }
 
-        $waUrl = "https://wa.me/" . $cleanPhone . "?text=" . urlencode($pesan);
+        $waUrl = !empty($cleanPhone) 
+            ? "https://wa.me/" . $cleanPhone . "?text=" . urlencode($pesan)
+            : "https://wa.me/?text=" . urlencode($pesan);
 
         jsonResponse([
             'status' => 'success',

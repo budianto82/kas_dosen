@@ -310,7 +310,7 @@ const App = {
     // Langsung buka form login di layar
     this.openModal('modalLogin');
 
-    // Auto-fokus ke input username/NIDN setelah animasi modal
+    // Auto-fokus ke input username/NIDOS setelah animasi modal
     setTimeout(() => {
       const userInput = document.querySelector('#modalLogin input[name="username"]');
       if (userInput) userInput.focus();
@@ -647,7 +647,7 @@ const App = {
                   <tr class="border-b border-slate-100">
                     <td class="sticky left-0 bg-white z-10 py-2.5 pr-2">
                       <div class="text-xs font-semibold text-slate-800 line-clamp-1">${d.nama_lengkap}</div>
-                      <div class="text-[10px] text-slate-400 font-mono">NIDN: ${d.nidn}</div>
+                      <div class="text-[10px] text-slate-400 font-mono">NIDOS: ${d.nidn}</div>
                     </td>
                     ${cells}
                     <td class="text-center text-xs font-bold text-slate-800">${d.total_bayar_formatted}</td>
@@ -1013,7 +1013,7 @@ const App = {
         this.activeDetailDosenNidn = d.nidn;
 
         document.getElementById('modalDetailDosenTitle').textContent = d.nama_lengkap;
-        document.getElementById('modalDetailDosenNidn').textContent = `NIDOS: ${d.nidn} • ${d.no_hp}`;
+        document.getElementById('modalDetailDosenNidn').textContent = `NIDOS: ${d.nidn}${d.no_hp ? ' • ' + d.no_hp : ''}`;
 
         const photoEl = document.getElementById('modalDetailDosenFoto');
         if (photoEl) {

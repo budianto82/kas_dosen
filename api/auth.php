@@ -44,7 +44,7 @@ switch ($action) {
             ]);
         }
 
-        // 2. Cek tabel dosen (dosen login dengan NIDN / NIDOS)
+        // 2. Cek tabel dosen (dosen login dengan NIDOS)
         $stmtDosen = $pdo->prepare("SELECT * FROM dosen WHERE nidn = ?");
         $stmtDosen->execute([$username]);
         $dosen = $stmtDosen->fetch();
@@ -73,7 +73,7 @@ switch ($action) {
             ]);
         }
 
-        jsonResponse(['status' => 'error', 'message' => 'Username/NIDN atau password salah.'], 401);
+        jsonResponse(['status' => 'error', 'message' => 'Username/NIDOS atau password salah.'], 401);
         break;
 
     case 'logout':

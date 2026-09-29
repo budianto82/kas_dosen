@@ -4,15 +4,15 @@
  * Kas Dosen - Universitas Pamulang (Prodi Sistem Informasi)
  */
 
-define('DB_DRIVER', 'mysql'); // 'mysql' (Laragon default) or 'sqlite'
+define('DB_DRIVER', getenv('DB_DRIVER') ?: 'mysql'); // 'mysql' (Laragon default) or 'sqlite'
 define('SQLITE_FILE', __DIR__ . '/../database/kas_dosen.db');
 
-// MySQL Settings (Laragon)
-define('MYSQL_HOST', '127.0.0.1');
-define('MYSQL_PORT', '3306');
-define('MYSQL_DB', 'kas_dosen_unpam');
-define('MYSQL_USER', 'root');
-define('MYSQL_PASS', '');
+// MySQL Settings (Laragon / Cloud)
+define('MYSQL_HOST', getenv('MYSQL_HOST') ?: '127.0.0.1');
+define('MYSQL_PORT', getenv('MYSQL_PORT') ?: '3306');
+define('MYSQL_DB', getenv('MYSQL_DATABASE') ?: (getenv('MYSQL_DB') ?: 'kas_dosen_unpam'));
+define('MYSQL_USER', getenv('MYSQL_USER') ?: 'root');
+define('MYSQL_PASS', getenv('MYSQL_PASSWORD') ?: (getenv('MYSQL_PASS') !== false ? getenv('MYSQL_PASS') : ''));
 
 function getDBConnection(): PDO {
     static $pdo = null;
@@ -39,6 +39,7 @@ function getDBConnection(): PDO {
                 $pdo->exec("ALTER TABLE iuran ALTER COLUMN bukti_bayar TYPE TEXT");
                 $pdo->exec("ALTER TABLE iuran ADD COLUMN IF NOT EXISTS catatan_bendahara TEXT");
                 $pdo->exec("CREATE TABLE IF NOT EXISTS pengaturan (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)");
+                $pdo->exec("ALTER TABLE dosen ALTER COLUMN no_hp DROP NOT NULL");
             } catch (Throwable $e) {}
             return $pdo;
         }
@@ -60,6 +61,9 @@ function getDBConnection(): PDO {
             try {
                 $pdo->exec("ALTER TABLE iuran MODIFY bukti_bayar LONGTEXT");
                 $pdo->exec("ALTER TABLE iuran ADD COLUMN catatan_bendahara TEXT");
+            } catch (Throwable $e) {}
+            try {
+                $pdo->exec("ALTER TABLE dosen MODIFY no_hp VARCHAR(50) NULL DEFAULT ''");
             } catch (Throwable $e) {}
             try {
                 $pdo->exec("CREATE TABLE IF NOT EXISTS `pengaturan` (`setting_key` VARCHAR(100) PRIMARY KEY, `setting_value` TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -119,7 +123,7 @@ function initMysqlSchema(PDO $pdo): void {
         nidn VARCHAR(50) UNIQUE NOT NULL,
         nama VARCHAR(150) NOT NULL,
         gelar VARCHAR(100) NULL,
-        no_hp VARCHAR(50) NOT NULL,
+        no_hp VARCHAR(50) NULL DEFAULT '',
         email VARCHAR(100) NULL,
         foto VARCHAR(255) NULL,
         jabatan VARCHAR(100) DEFAULT 'Dosen Tetap',
@@ -191,7 +195,7 @@ function initSqliteSchema(PDO $pdo): void {
         nidn TEXT UNIQUE NOT NULL,
         nama TEXT NOT NULL,
         gelar TEXT,
-        no_hp TEXT NOT NULL,
+        no_hp TEXT DEFAULT '',
         email TEXT,
         jabatan TEXT DEFAULT 'Dosen Tetap',
         status TEXT NOT NULL DEFAULT 'aktif',

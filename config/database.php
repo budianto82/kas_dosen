@@ -35,14 +35,32 @@ function getDBConnection(): PDO {
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
-            try {
-                $pdo->exec("ALTER TABLE iuran ALTER COLUMN bukti_bayar TYPE TEXT");
-                $pdo->exec("ALTER TABLE iuran ADD COLUMN IF NOT EXISTS catatan_bendahara TEXT");
-                $pdo->exec("CREATE TABLE IF NOT EXISTS pengaturan (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)");
-                $pdo->exec("ALTER TABLE dosen ALTER COLUMN no_hp DROP NOT NULL");
-                $pdo->exec("ALTER TABLE dosen ALTER COLUMN foto TYPE TEXT");
-                $pdo->exec("ALTER TABLE users ALTER COLUMN foto TYPE TEXT");
-            } catch (Throwable $e) {}
+            $pgMigrations = [
+                "CREATE TABLE IF NOT EXISTS pengaturan (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS gelar VARCHAR(100)",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS no_hp VARCHAR(50) DEFAULT ''",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS email VARCHAR(100)",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS foto TEXT",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS jabatan VARCHAR(100) DEFAULT 'Dosen Tetap'",
+                "ALTER TABLE dosen ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'aktif'",
+                "ALTER TABLE dosen ALTER COLUMN no_hp DROP NOT NULL",
+                "ALTER TABLE dosen ALTER COLUMN foto TYPE TEXT",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS nidn VARCHAR(50)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS no_hp VARCHAR(50)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS foto TEXT",
+                "ALTER TABLE users ALTER COLUMN foto TYPE TEXT",
+                "ALTER TABLE iuran ADD COLUMN IF NOT EXISTS bukti_bayar TEXT",
+                "ALTER TABLE iuran ALTER COLUMN bukti_bayar TYPE TEXT",
+                "ALTER TABLE iuran ADD COLUMN IF NOT EXISTS catatan_bendahara TEXT",
+                "ALTER TABLE pengeluaran ADD COLUMN IF NOT EXISTS pj_penerima VARCHAR(150)",
+                "ALTER TABLE pengeluaran ADD COLUMN IF NOT EXISTS bukti_nota TEXT",
+                "ALTER TABLE pengeluaran ALTER COLUMN bukti_nota TYPE TEXT"
+            ];
+            foreach ($pgMigrations as $sql) {
+                try {
+                    $pdo->exec($sql);
+                } catch (Throwable $e) {}
+            }
             return $pdo;
         }
 
@@ -60,20 +78,25 @@ function getDBConnection(): PDO {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
 
-            try {
-                $pdo->exec("ALTER TABLE iuran MODIFY bukti_bayar LONGTEXT");
-                $pdo->exec("ALTER TABLE iuran ADD COLUMN catatan_bendahara TEXT");
-            } catch (Throwable $e) {}
-            try {
-                $pdo->exec("ALTER TABLE dosen MODIFY no_hp VARCHAR(50) NULL DEFAULT ''");
-            } catch (Throwable $e) {}
-            try {
-                $pdo->exec("ALTER TABLE dosen MODIFY foto LONGTEXT");
-                $pdo->exec("ALTER TABLE users MODIFY foto LONGTEXT");
-            } catch (Throwable $e) {}
-            try {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS `pengaturan` (`setting_key` VARCHAR(100) PRIMARY KEY, `setting_value` TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-            } catch (Throwable $e) {}
+            $mysqlMigrations = [
+                "ALTER TABLE iuran MODIFY bukti_bayar LONGTEXT",
+                "ALTER TABLE iuran ADD COLUMN catatan_bendahara TEXT",
+                "ALTER TABLE dosen MODIFY no_hp VARCHAR(50) NULL DEFAULT ''",
+                "ALTER TABLE dosen ADD COLUMN gelar VARCHAR(100) NULL",
+                "ALTER TABLE dosen ADD COLUMN email VARCHAR(100) NULL",
+                "ALTER TABLE dosen ADD COLUMN foto LONGTEXT",
+                "ALTER TABLE dosen MODIFY foto LONGTEXT",
+                "ALTER TABLE users ADD COLUMN nidn VARCHAR(50) NULL",
+                "ALTER TABLE users ADD COLUMN no_hp VARCHAR(50) NULL",
+                "ALTER TABLE users ADD COLUMN foto LONGTEXT",
+                "ALTER TABLE users MODIFY foto LONGTEXT",
+                "CREATE TABLE IF NOT EXISTS `pengaturan` (`setting_key` VARCHAR(100) PRIMARY KEY, `setting_value` TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+            ];
+            foreach ($mysqlMigrations as $mSql) {
+                try {
+                    $pdo->exec($mSql);
+                } catch (Throwable $e) {}
+            }
 
             // Cek apakah tabel sudah ada
             $checkTable = $pdo->query("SHOW TABLES LIKE 'dosen'")->rowCount();
@@ -96,6 +119,20 @@ function getDBConnection(): PDO {
 
             if ($isNew || filesize(SQLITE_FILE) === 0) {
                 initSqliteSchema($pdo);
+            }
+
+            $sqliteMigrations = [
+                "ALTER TABLE dosen ADD COLUMN foto TEXT",
+                "ALTER TABLE dosen ADD COLUMN gelar TEXT",
+                "ALTER TABLE users ADD COLUMN foto TEXT",
+                "ALTER TABLE users ADD COLUMN nidn TEXT",
+                "ALTER TABLE users ADD COLUMN no_hp TEXT",
+                "ALTER TABLE iuran ADD COLUMN catatan_bendahara TEXT"
+            ];
+            foreach ($sqliteMigrations as $sSql) {
+                try {
+                    $pdo->exec($sSql);
+                } catch (Throwable $e) {}
             }
         }
 

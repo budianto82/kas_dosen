@@ -12,8 +12,17 @@ if (!defined('AUTH_SECRET')) {
 }
 
 function generateAuthToken(array $user): string {
+    // Pastikan token ringkas, cepat, dan aman (< 300 bytes)
+    // JANGAN PERNAH menyertakan data biner/base64 foto ke dalam token/cookie
+    $safeUser = [
+        'id' => $user['id'] ?? null,
+        'username' => $user['username'] ?? '',
+        'role' => $user['role'] ?? 'dosen',
+        'nidn' => $user['nidn'] ?? '',
+        'nama' => $user['nama'] ?? ''
+    ];
     $data = [
-        'user' => $user,
+        'user' => $safeUser,
         'exp' => time() + (86400 * 30) // 30 hari
     ];
     $payload = base64_encode(json_encode($data));
@@ -62,6 +71,10 @@ function getAuthUser(): ?array {
     }
 
     if (!empty($token)) {
+        // Abaikan token jika ukurannya tidak wajar (mencegah payload bloat / HTTP 431)
+        if (strlen($token) > 2048) {
+            return null;
+        }
         $parts = explode('.', $token);
         if (count($parts) === 2) {
             [$payload, $sig] = $parts;
@@ -155,10 +168,30 @@ function handleFileUpload(string $inputName, string $targetDir): ?string {
     }
 
     // Fallback untuk Vercel / Cloud serverless (filesystem read-only)
-    // Simpan gambar langsung sebagai Base64 Data URI
+    // Simpan gambar langsung sebagai Base64 Data URI yang dikompresi
     if (str_starts_with($mimeType, 'image/')) {
         $content = @file_get_contents($file['tmp_name']);
         if ($content !== false) {
+            // Jika GD tersedia dan file > 50KB, perkecil resolusi agar base64 ringkas (< 30KB)
+            if (function_exists('imagecreatefromstring') && strlen($content) > 50000) {
+                $srcImg = @imagecreatefromstring($content);
+                if ($srcImg !== false) {
+                    $w = imagesx($srcImg);
+                    $h = imagesy($srcImg);
+                    $maxDim = 320;
+                    if ($w > $maxDim || $h > $maxDim) {
+                        $scaled = imagescale($srcImg, $maxDim);
+                    } else {
+                        $scaled = $srcImg;
+                    }
+                    ob_start();
+                    imagejpeg($scaled, null, 80);
+                    $content = ob_get_clean();
+                    $mimeType = 'image/jpeg';
+                    imagedestroy($srcImg);
+                    if ($scaled !== $srcImg) imagedestroy($scaled);
+                }
+            }
             return 'data:' . $mimeType . ';base64,' . base64_encode($content);
         }
     }

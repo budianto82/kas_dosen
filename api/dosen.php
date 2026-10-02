@@ -185,6 +185,10 @@ switch ($action) {
         $nidn = trim($_POST['nidn'] ?? '');
 
         $fotoPath = handleFileUpload('foto_profil', 'foto_profil');
+        if (!$fotoPath && !empty($_POST['foto_base64'])) {
+            $fotoPath = $_POST['foto_base64'];
+        }
+
         if (!$fotoPath) {
             jsonResponse(['status' => 'error', 'message' => 'Gagal mengupload foto. Pastikan format JPG, PNG, atau WEBP dan ukuran maksimal 5MB.'], 400);
         }
@@ -197,26 +201,28 @@ switch ($action) {
                 jsonResponse(['status' => 'error', 'message' => 'Hanya bendahara yang berhak mengubah foto dosen lain.'], 403);
             }
 
-            $stmtD = $pdo->prepare("SELECT id, nidn FROM dosen WHERE id = ?");
-            $stmtD->execute([$dosenId]);
-            $targetDosen = $stmtD->fetch();
+            try {
+                $stmtD = $pdo->prepare("SELECT id, nidn FROM dosen WHERE id = ?");
+                $stmtD->execute([$dosenId]);
+                $targetDosen = $stmtD->fetch();
 
-            if ($targetDosen) {
-                $stmtUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE id = ?");
-                $stmtUpdate->execute([$fotoPath, $dosenId]);
+                if ($targetDosen) {
+                    $stmtUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE id = ?");
+                    $stmtUpdate->execute([$fotoPath, $dosenId]);
 
-                if (!empty($targetDosen['nidn'])) {
-                    $stmtUserUpdate = $pdo->prepare("UPDATE users SET foto = ? WHERE nidn = ? OR username = ?");
-                    $stmtUserUpdate->execute([$fotoPath, $targetDosen['nidn'], $targetDosen['nidn']]);
+                    if (!empty($targetDosen['nidn'])) {
+                        $stmtUserUpdate = $pdo->prepare("UPDATE users SET foto = ? WHERE nidn = ? OR username = ?");
+                        $stmtUserUpdate->execute([$fotoPath, $targetDosen['nidn'], $targetDosen['nidn']]);
+                    }
+
+                    if (($currentUser['nidn'] ?? '') === $targetDosen['nidn']) {
+                        $_SESSION['user']['foto'] = $fotoPath;
+                        $currentUser['foto'] = $fotoPath;
+                        $newToken = generateAuthToken($_SESSION['user']);
+                        setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
+                    }
                 }
-
-                if (($currentUser['nidn'] ?? '') === $targetDosen['nidn']) {
-                    $_SESSION['user']['foto'] = $fotoPath;
-                    $currentUser['foto'] = $fotoPath;
-                    $newToken = generateAuthToken($_SESSION['user']);
-                    setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
-                }
-            }
+            } catch (Throwable $e) {}
 
             jsonResponse([
                 'status' => 'success',
@@ -229,17 +235,19 @@ switch ($action) {
             $userId = (int)($currentUser['id'] ?? 0);
             $username = $currentUser['username'] ?? '';
 
-            // Update di tabel users (semua record yang cocok)
-            if ($userId || !empty($username) || !empty($userNidn)) {
-                $stmtUp = $pdo->prepare("UPDATE users SET foto = ? WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
-                $stmtUp->execute([$fotoPath, $userId, $username, $userNidn]);
-            }
+            try {
+                // Update di tabel users (semua record yang cocok)
+                if ($userId || !empty($username) || !empty($userNidn)) {
+                    $stmtUp = $pdo->prepare("UPDATE users SET foto = ? WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
+                    $stmtUp->execute([$fotoPath, $userId, $username, $userNidn]);
+                }
 
-            // Update di tabel dosen jika ada record NIDN
-            if (!empty($userNidn)) {
-                $stmtDosenUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE nidn = ?");
-                $stmtDosenUpdate->execute([$fotoPath, $userNidn]);
-            }
+                // Update di tabel dosen jika ada record NIDN
+                if (!empty($userNidn)) {
+                    $stmtDosenUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE nidn = ?");
+                    $stmtDosenUpdate->execute([$fotoPath, $userNidn]);
+                }
+            } catch (Throwable $e) {}
 
             $_SESSION['user']['foto'] = $fotoPath;
             $currentUser['foto'] = $fotoPath;

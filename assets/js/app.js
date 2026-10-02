@@ -9,7 +9,8 @@ window.fetch = function(url, options = {}) {
   options = options || {};
   options.credentials = options.credentials || 'same-origin';
   const token = localStorage.getItem('kas_token');
-  if (token) {
+  // Pastikan token tidak berukuran raksasa (> 2048 karakter) agar tidak menyebabkan HTTP 431
+  if (token && token.length <= 2048) {
     if (!options.headers) {
       options.headers = {};
     }
@@ -39,6 +40,14 @@ const App = {
   },
 
   init() {
+    // Bersihkan token yang terlalu besar/korup jika pernah tersimpan di browser user
+    const existingToken = localStorage.getItem('kas_token');
+    if (existingToken && existingToken.length > 2000) {
+      console.warn('Clearing oversized token to prevent HTTP 431');
+      localStorage.removeItem('kas_token');
+      document.cookie = 'kas_token=; Max-Age=0; path=/;';
+    }
+
     this.registerServiceWorker();
     this.setupInstallPrompt();
     if (!localStorage.getItem('kas_token')) {
@@ -325,6 +334,20 @@ const App = {
     const formData = new FormData(form);
     const body = Object.fromEntries(formData.entries());
 
+    // Bersihkan token yang tidak valid sebelum mencoba login
+    const curToken = localStorage.getItem('kas_token');
+    if (curToken && curToken.length > 2000) {
+      localStorage.removeItem('kas_token');
+      document.cookie = 'kas_token=; Max-Age=0; path=/;';
+    }
+
+    const btnSubmit = form.querySelector('button[type="submit"]');
+    const originalBtnHtml = btnSubmit ? btnSubmit.innerHTML : '';
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<span class="inline-block animate-spin mr-1.5">⌛</span><span>Memeriksa Akun...</span>';
+    }
+
     try {
       const res = await fetch('api/auth.php?action=login', {
         method: 'POST',
@@ -344,10 +367,17 @@ const App = {
         this.loadDashboard();
         this.loadDosenList();
       } else {
-        this.showToast(data.message || 'Login gagal.', 'error');
+        this.showToast(data.message || 'Login gagal. Periksa kembali NIDOS/Username & Password.', 'error');
       }
     } catch (err) {
-      this.showToast('Terjadi kesalahan jaringan.', 'error');
+      console.error('Login error:', err);
+      this.showToast('Gagal terhubung ke server atau terjadi kesalahan jaringan.', 'error');
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = originalBtnHtml;
+        if (window.lucide) lucide.createIcons();
+      }
     }
   },
 
@@ -466,17 +496,41 @@ const App = {
     });
 
     // Deteksi aktivitas user untuk auto-logout 2 menit jika idle
-    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'touchmove', 'pointerdown', 'click'];
     activityEvents.forEach(evt => {
       window.addEventListener(evt, () => this.resetInactivityTimer(), { passive: true });
+    });
+
+    // Deteksi jika user kembali ke tab setelah layar HP mati atau berpindah aplikasi
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.state.user) {
+        const elapsed = Date.now() - (this.lastActivityTime || Date.now());
+        if (elapsed >= 120 * 1000) {
+          this.performAutoLogout();
+        } else {
+          this.resetInactivityTimer();
+        }
+      }
+    });
+    window.addEventListener('focus', () => {
+      if (this.state.user) {
+        const elapsed = Date.now() - (this.lastActivityTime || Date.now());
+        if (elapsed >= 120 * 1000) {
+          this.performAutoLogout();
+        } else {
+          this.resetInactivityTimer();
+        }
+      }
     });
   },
 
   // 3b. Inactivity Auto-Logout (2 Menit Idle)
+  lastActivityTime: Date.now(),
   inactivityTimer: null,
   inactivityWarningTimer: null,
 
   resetInactivityTimer() {
+    this.lastActivityTime = Date.now();
     if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
     if (this.inactivityWarningTimer) clearTimeout(this.inactivityWarningTimer);
 
@@ -1341,28 +1395,107 @@ const App = {
   },
 
   // 10b. Foto Profil Upload & Profile Settings Handlers
+  // Helper: Kompresi foto otomatis di browser (maks 320x320 JPEG kualitas 0.82)
+  // Menghasilkan file sangat ringkas (~15-25KB), cepat diupload dan aman dari limit Vercel
+  async compressImageFile(file, maxDimension = 320, quality = 0.82) {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      return file;
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob && blob.size < file.size) {
+              const compFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compFile);
+            } else {
+              resolve(file);
+            }
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  },
+
+  async imageFileToCompressedDataUrl(file, maxDimension = 320, quality = 0.82) {
+    if (!file) return null;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  },
+
   async uploadFotoProfil(input) {
     if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
+    const rawFile = input.files[0];
+    this.showToast('Memproses & mengompresi foto...', 'info');
 
-    if (file.size > 5 * 1024 * 1024) {
-      this.showToast('Ukuran foto maksimal 5MB.', 'error');
-      input.value = '';
-      return;
-    }
+    const file = await this.compressImageFile(rawFile, 320, 0.82);
+    const dataUri = await this.imageFileToCompressedDataUrl(file, 320, 0.82);
 
     const formData = new FormData();
-    formData.append('foto_profil', file);
+    formData.append('foto_profil', file, 'profile.jpg');
+    if (dataUri) {
+      formData.append('foto_base64', dataUri);
+    }
     formData.append('target', 'self');
     const token = localStorage.getItem('kas_token');
-    if (token) {
+    if (token && token.length <= 2000) {
       formData.append('auth_token', token);
     }
     if (this.state.user && this.state.user.nidn) {
       formData.append('nidn', this.state.user.nidn);
     }
-
-    this.showToast('Mengunggah foto profil...', 'info');
 
     try {
       const res = await fetch('api/dosen.php?action=upload_foto', {
@@ -1378,7 +1511,7 @@ const App = {
         if (data.user) {
           this.state.user = data.user;
         } else if (this.state.user) {
-          this.state.user.foto = data.foto;
+          this.state.user.foto = data.foto || dataUri;
         }
         this.updateUserUI();
         this.loadDosenList();
@@ -1395,19 +1528,20 @@ const App = {
 
   async uploadFotoDosenDetail(input) {
     if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
+    const rawFile = input.files[0];
+    this.showToast('Memproses & mengompresi foto...', 'info');
 
-    if (file.size > 5 * 1024 * 1024) {
-      this.showToast('Ukuran foto maksimal 5MB.', 'error');
-      input.value = '';
-      return;
-    }
+    const file = await this.compressImageFile(rawFile, 320, 0.82);
+    const dataUri = await this.imageFileToCompressedDataUrl(file, 320, 0.82);
 
     const formData = new FormData();
-    formData.append('foto_profil', file);
+    formData.append('foto_profil', file, 'profile.jpg');
+    if (dataUri) {
+      formData.append('foto_base64', dataUri);
+    }
     formData.append('target', 'dosen_detail');
     const token = localStorage.getItem('kas_token');
-    if (token) {
+    if (token && token.length <= 2000) {
       formData.append('auth_token', token);
     }
     if (this.activeDetailDosenId) {
@@ -1417,8 +1551,6 @@ const App = {
       formData.append('nidn', this.activeDetailDosenNidn);
     }
 
-    this.showToast('Mengunggah foto dosen...', 'info');
-
     try {
       const res = await fetch('api/dosen.php?action=upload_foto', {
         method: 'POST',
@@ -1427,20 +1559,13 @@ const App = {
       const data = await res.json();
       if (data.status === 'success') {
         this.showToast(data.message, 'success');
-        const photoEl = document.getElementById('modalDetailDosenFoto');
-        if (photoEl) {
-          photoEl.innerHTML = `<img src="${data.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
-        }
-        if (this.state.user && (this.state.user.nidn === this.activeDetailDosenNidn || this.state.user.id == this.activeDetailDosenId)) {
-          this.state.user.foto = data.foto;
-          if (data.token) {
-            localStorage.setItem('kas_token', data.token);
-          }
-          this.updateUserUI();
+        const modalFoto = document.getElementById('modalDetailDosenFoto');
+        if (modalFoto) {
+          modalFoto.innerHTML = `<img src="${data.foto || dataUri}" class="w-full h-full object-cover">`;
         }
         this.loadDosenList();
       } else {
-        this.showToast(data.message || 'Gagal mengunggah foto.', 'error');
+        this.showToast(data.message || 'Gagal mengunggah foto dosen.', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -1508,22 +1633,14 @@ const App = {
     if (window.lucide) lucide.createIcons();
   },
 
-  previewModalProfilePhoto(input) {
+  async previewModalProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-    if (file.size > 5 * 1024 * 1024) {
-      this.showToast('Ukuran foto maksimal 5MB.', 'error');
-      input.value = '';
-      return;
+    const rawFile = input.files[0];
+    const dataUri = await this.imageFileToCompressedDataUrl(rawFile, 320, 0.82);
+    const photoEl = document.getElementById('modalProfilePhotoPreview');
+    if (photoEl && dataUri) {
+      photoEl.innerHTML = `<img src="${dataUri}" class="w-full h-full object-cover">`;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const photoEl = document.getElementById('modalProfilePhotoPreview');
-      if (photoEl) {
-        photoEl.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
-      }
-    };
-    reader.readAsDataURL(file);
   },
 
   async submitUpdateProfile(e) {
@@ -1537,8 +1654,19 @@ const App = {
 
     const formData = new FormData(form);
     const token = localStorage.getItem('kas_token');
-    if (token) {
+    if (token && token.length <= 2000) {
       formData.append('auth_token', token);
+    }
+
+    const fileInput = document.getElementById('inputModalUploadFoto');
+    let localDataUri = null;
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      const comp = await this.compressImageFile(fileInput.files[0], 320, 0.82);
+      formData.set('foto_profil', comp, 'profile.jpg');
+      localDataUri = await this.imageFileToCompressedDataUrl(comp, 320, 0.82);
+      if (localDataUri) {
+        formData.append('foto_base64', localDataUri);
+      }
     }
 
     const passBaru = formData.get('password_baru');
@@ -1566,6 +1694,8 @@ const App = {
         }
         if (data.user) {
           this.state.user = data.user;
+        } else if (this.state.user && localDataUri) {
+          this.state.user.foto = localDataUri;
         }
         this.updateUserUI();
         this.loadDosenList();
@@ -1575,7 +1705,7 @@ const App = {
       }
     } catch (err) {
       console.error(err);
-      this.showToast('Terjadi kesalahan jaringan.', 'error');
+      this.showToast('Terjadi kesalahan jaringan atau server.', 'error');
     } finally {
       if (btn) {
         btn.disabled = false;

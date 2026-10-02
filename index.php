@@ -78,14 +78,25 @@ $isLoggedIn = !empty($authUser);
 
         <!-- Tombol Aksi & Avatar -->
         <div class="flex items-center gap-1.5 flex-shrink-0">
-          <div id="userHeaderAvatar" class="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer hidden" onclick="App.openEditProfileModal()" title="Setingan Profil Akun">
-            <!-- Rendered by JS -->
+          <div id="userHeaderAvatar" class="w-8 h-8 rounded-full bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center overflow-hidden flex-shrink-0 border border-white/30 shadow cursor-pointer <?= $isLoggedIn ? '' : 'hidden' ?>" onclick="App.openEditProfileModal()" title="Setingan Profil Akun">
+            <?php if ($isLoggedIn): ?>
+              <?php
+                $initials = strtoupper(substr($authUser['nama'] ?? 'SI', 0, 2));
+                $foto = $authUser['foto'] ?? '';
+                if (!empty($foto)):
+                  $src = str_starts_with($foto, 'data:') ? $foto : htmlspecialchars($foto) . '?v=' . time();
+              ?>
+                <img src="<?= $src ?>" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.parentElement.textContent='<?= $initials ?>'">
+              <?php else: ?>
+                <?= $initials ?>
+              <?php endif; ?>
+            <?php endif; ?>
           </div>
           <button id="btnSettingsAction" onclick="App.openSettingsModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all flex-shrink-0 hidden" title="Pengaturan Kas (Bendahara)">
             <i data-lucide="settings" class="w-4 h-4"></i>
           </button>
           <button id="authActionBtn" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all flex-shrink-0" title="Login / Logout">
-            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <i data-lucide="<?= $isLoggedIn ? 'log-out' : 'log-in' ?>" class="w-4 h-4"></i>
           </button>
         </div>
       </div>
@@ -98,20 +109,31 @@ $isLoggedIn = !empty($authUser);
       <section id="tab-beranda" class="tab-pane space-y-4">
         
         <!-- Header Profil Pengguna di Dashboard (Tab Beranda) -->
-        <div id="dashUserProfileCard" class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex items-center justify-between hidden">
+        <div id="dashUserProfileCard" class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex items-center justify-between <?= $isLoggedIn ? '' : 'hidden' ?>">
           <div class="flex items-center gap-3 min-w-0">
             <div id="dashUserAvatar" class="w-11 h-11 rounded-full bg-amber-400 text-slate-900 font-extrabold text-sm flex items-center justify-center overflow-hidden border-2 border-white shadow flex-shrink-0 cursor-pointer" onclick="App.openEditProfileModal()" title="Setingan Profil">
-              <!-- Rendered by JS -->
+              <?php if ($isLoggedIn): ?>
+                <?php
+                  $initials = strtoupper(substr($authUser['nama'] ?? 'SI', 0, 2));
+                  $foto = $authUser['foto'] ?? '';
+                  if (!empty($foto)):
+                    $src = str_starts_with($foto, 'data:') ? $foto : htmlspecialchars($foto) . '?v=' . time();
+                ?>
+                  <img src="<?= $src ?>" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.parentElement.textContent='<?= $initials ?>'">
+                <?php else: ?>
+                  <?= $initials ?>
+                <?php endif; ?>
+              <?php endif; ?>
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5 mb-0.5">
                 <span id="dashUserRoleBadge" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900 tracking-wide uppercase">
-                  BENDAHARA
+                  <?= strtoupper($authUser['role'] ?? 'DOSEN') ?>
                 </span>
                 <span class="text-[10px] text-slate-400 font-medium">Selamat Datang</span>
               </div>
-              <h2 id="dashUserNama" class="text-xs sm:text-sm font-bold text-slate-800 truncate leading-tight">Nama Pengguna</h2>
-              <p id="dashUserNidn" class="text-[10px] text-slate-400 font-mono mt-0.5">NIDOS: -</p>
+              <h2 id="dashUserNama" class="text-xs sm:text-sm font-bold text-slate-800 truncate leading-tight"><?= htmlspecialchars($authUser['nama'] ?? 'Nama Pengguna') ?></h2>
+              <p id="dashUserNidn" class="text-[10px] text-slate-400 font-mono mt-0.5">NIDOS: <?= htmlspecialchars($authUser['nidn'] ?? ($authUser['username'] ?? '-')) ?></p>
             </div>
           </div>
           <button onclick="App.openEditProfileModal()" class="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center gap-1 transition-colors flex-shrink-0 ml-2" title="Setingan Profil">
@@ -522,11 +544,18 @@ $isLoggedIn = !empty($authUser);
       <form onsubmit="App.login(event)" class="space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Username / NIDOS Dosen</label>
-          <input type="text" name="username" required placeholder="Masukkan NIDOS Anda" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          <input type="text" name="username" required placeholder="Masukkan NIDOS Anda" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Kata Sandi (Password)</label>
-          <input type="password" name="password" required placeholder="Kata sandi akun" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Kata Sandi (Password)</label>
+            <button type="button" onclick="const p=this.closest('div').nextElementSibling.querySelector('input'); p.type = p.type === 'password' ? 'text' : 'password'; this.querySelector('span').textContent = p.type === 'password' ? 'Lihat' : 'Sembunyi';" class="text-[10px] text-blue-900 font-semibold hover:underline cursor-pointer">
+              <span>Lihat</span> Sandi
+            </button>
+          </div>
+          <div class="relative">
+            <input type="password" name="password" required placeholder="Kata sandi akun" autocomplete="current-password" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          </div>
         </div>
         <div class="p-2.5 bg-blue-50 text-blue-900 rounded-xl text-[11px] leading-relaxed">
           💡 <strong>Petunjuk Login Dosen:</strong><br>

@@ -40,6 +40,8 @@ function getDBConnection(): PDO {
                 $pdo->exec("ALTER TABLE iuran ADD COLUMN IF NOT EXISTS catatan_bendahara TEXT");
                 $pdo->exec("CREATE TABLE IF NOT EXISTS pengaturan (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)");
                 $pdo->exec("ALTER TABLE dosen ALTER COLUMN no_hp DROP NOT NULL");
+                $pdo->exec("ALTER TABLE dosen ALTER COLUMN foto TYPE TEXT");
+                $pdo->exec("ALTER TABLE users ALTER COLUMN foto TYPE TEXT");
             } catch (Throwable $e) {}
             return $pdo;
         }
@@ -64,6 +66,10 @@ function getDBConnection(): PDO {
             } catch (Throwable $e) {}
             try {
                 $pdo->exec("ALTER TABLE dosen MODIFY no_hp VARCHAR(50) NULL DEFAULT ''");
+            } catch (Throwable $e) {}
+            try {
+                $pdo->exec("ALTER TABLE dosen MODIFY foto LONGTEXT");
+                $pdo->exec("ALTER TABLE users MODIFY foto LONGTEXT");
             } catch (Throwable $e) {}
             try {
                 $pdo->exec("CREATE TABLE IF NOT EXISTS `pengaturan` (`setting_key` VARCHAR(100) PRIMARY KEY, `setting_value` TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");

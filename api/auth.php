@@ -29,7 +29,7 @@ switch ($action) {
             unset($user['password_hash']);
             // Cek foto dari tabel dosen jika di users belum ada
             if (empty($user['foto']) && !empty($user['nidn'])) {
-                $stmtFoto = $pdo->prepare("SELECT foto FROM dosen WHERE nidn = ?");
+                $stmtFoto = $pdo->prepare("SELECT foto FROM dosen WHERE nidn = ? AND foto IS NOT NULL AND foto != ''");
                 $stmtFoto->execute([$user['nidn']]);
                 $user['foto'] = $stmtFoto->fetchColumn() ?: null;
             }
@@ -53,6 +53,13 @@ switch ($action) {
             // NIDOS 03144 diset sebagai Bendahara, selain itu dosen biasa (hanya bisa lihat)
             $role = ($dosen['nidn'] === '03144') ? 'bendahara' : 'dosen';
 
+            $dosenFoto = !empty($dosen['foto']) ? $dosen['foto'] : null;
+            if (!$dosenFoto) {
+                $stmtUF = $pdo->prepare("SELECT foto FROM users WHERE (nidn = ? OR username = ?) AND foto IS NOT NULL AND foto != ''");
+                $stmtUF->execute([$dosen['nidn'], $dosen['nidn']]);
+                $dosenFoto = $stmtUF->fetchColumn() ?: null;
+            }
+
             $userSession = [
                 'id' => $dosen['id'],
                 'username' => $dosen['nidn'],
@@ -60,7 +67,7 @@ switch ($action) {
                 'role' => $role,
                 'nidn' => $dosen['nidn'],
                 'no_hp' => $dosen['no_hp'],
-                'foto' => $dosen['foto'] ?? null
+                'foto' => $dosenFoto
             ];
             $_SESSION['user'] = $userSession;
             $token = generateAuthToken($userSession);
@@ -85,12 +92,13 @@ switch ($action) {
     case 'check':
         $u = getAuthUser();
         if ($u) {
+            $photo = !empty($u['foto']) ? $u['foto'] : null;
             if (!empty($u['nidn'])) {
                 $stmtRef = $pdo->prepare("SELECT id, foto, nama, gelar, no_hp, email FROM dosen WHERE nidn = ?");
                 $stmtRef->execute([$u['nidn']]);
                 $ref = $stmtRef->fetch();
                 if ($ref) {
-                    if (!empty($ref['foto'])) $u['foto'] = $ref['foto'];
+                    if (!empty($ref['foto'])) $photo = $ref['foto'];
                     if (!empty($ref['nama'])) $u['nama'] = $ref['nama'] . ($ref['gelar'] ? ', ' . $ref['gelar'] : '');
                     $u['gelar'] = $ref['gelar'] ?? '';
                     $u['no_hp'] = $ref['no_hp'] ?? ($u['no_hp'] ?? '');
@@ -99,15 +107,16 @@ switch ($action) {
                 }
             }
             if (!empty($u['id']) || !empty($u['username'])) {
-                $stmtUser = $pdo->prepare("SELECT foto, nama, no_hp, role FROM users WHERE id = ? OR username = ?");
-                $stmtUser->execute([$u['id'] ?? 0, $u['username'] ?? '']);
+                $stmtUser = $pdo->prepare("SELECT foto, nama, no_hp, role FROM users WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
+                $stmtUser->execute([$u['id'] ?? 0, $u['username'] ?? '', $u['nidn'] ?? '']);
                 $uRow = $stmtUser->fetch();
                 if ($uRow) {
-                    if (!empty($uRow['foto'])) $u['foto'] = $uRow['foto'];
+                    if (!empty($uRow['foto'])) $photo = $uRow['foto'];
                     if (!empty($uRow['role'])) $u['role'] = $uRow['role'];
                     if (empty($u['nama']) && !empty($uRow['nama'])) $u['nama'] = $uRow['nama'];
                 }
             }
+            $u['foto'] = $photo;
             $_SESSION['user'] = $u;
             $newToken = generateAuthToken($u);
             setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);

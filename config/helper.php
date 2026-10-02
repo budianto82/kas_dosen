@@ -143,15 +143,24 @@ function handleFileUpload(string $inputName, string $targetDir): ?string {
 
     $absDir = __DIR__ . '/../uploads/' . trim($targetDir, '/');
     if (!is_dir($absDir)) {
-        mkdir($absDir, 0777, true);
+        @mkdir($absDir, 0777, true);
     }
 
     $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
     $filename = time() . '_' . bin2hex(random_bytes(4)) . '.' . strtolower($ext);
     $destination = $absDir . '/' . $filename;
 
-    if (move_uploaded_file($file['tmp_name'], $destination)) {
+    if (@move_uploaded_file($file['tmp_name'], $destination)) {
         return 'uploads/' . trim($targetDir, '/') . '/' . $filename;
+    }
+
+    // Fallback untuk Vercel / Cloud serverless (filesystem read-only)
+    // Simpan gambar langsung sebagai Base64 Data URI
+    if (str_starts_with($mimeType, 'image/')) {
+        $content = @file_get_contents($file['tmp_name']);
+        if ($content !== false) {
+            return 'data:' . $mimeType . ';base64,' . base64_encode($content);
+        }
     }
 
     return null;

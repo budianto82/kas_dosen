@@ -97,6 +97,29 @@ $isLoggedIn = !empty($authUser);
       <!-- ==================== TAB 1: BERANDA ==================== -->
       <section id="tab-beranda" class="tab-pane space-y-4">
         
+        <!-- Header Profil Pengguna di Dashboard (Tab Beranda) -->
+        <div id="dashUserProfileCard" class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex items-center justify-between hidden">
+          <div class="flex items-center gap-3 min-w-0">
+            <div id="dashUserAvatar" class="w-11 h-11 rounded-full bg-amber-400 text-slate-900 font-extrabold text-sm flex items-center justify-center overflow-hidden border-2 border-white shadow flex-shrink-0 cursor-pointer" onclick="App.openEditProfileModal()" title="Setingan Profil">
+              <!-- Rendered by JS -->
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <span id="dashUserRoleBadge" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900 tracking-wide uppercase">
+                  BENDAHARA
+                </span>
+                <span class="text-[10px] text-slate-400 font-medium">Selamat Datang</span>
+              </div>
+              <h2 id="dashUserNama" class="text-xs sm:text-sm font-bold text-slate-800 truncate leading-tight">Nama Pengguna</h2>
+              <p id="dashUserNidn" class="text-[10px] text-slate-400 font-mono mt-0.5">NIDOS: -</p>
+            </div>
+          </div>
+          <button onclick="App.openEditProfileModal()" class="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center gap-1 transition-colors flex-shrink-0 ml-2" title="Setingan Profil">
+            <i data-lucide="user-cog" class="w-3.5 h-3.5 text-blue-900"></i>
+            <span>Setingan</span>
+          </button>
+        </div>
+
         <!-- Saldo Kas Card -->
         <div class="saldo-card rounded-2xl p-5 text-white shadow-lg">
           <div class="flex items-center justify-between text-xs text-slate-300 mb-1">

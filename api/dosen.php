@@ -229,15 +229,10 @@ switch ($action) {
             $userId = (int)($currentUser['id'] ?? 0);
             $username = $currentUser['username'] ?? '';
 
-            // Update di tabel users
+            // Update di tabel users (semua record yang cocok)
             if ($userId || !empty($username) || !empty($userNidn)) {
-                $stmtUserUpdate = $pdo->prepare("SELECT id FROM users WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
-                $stmtUserUpdate->execute([$userId, $username, $userNidn]);
-                $uId = $stmtUserUpdate->fetchColumn();
-                if ($uId) {
-                    $stmtUp = $pdo->prepare("UPDATE users SET foto = ? WHERE id = ?");
-                    $stmtUp->execute([$fotoPath, $uId]);
-                }
+                $stmtUp = $pdo->prepare("UPDATE users SET foto = ? WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
+                $stmtUp->execute([$fotoPath, $userId, $username, $userNidn]);
             }
 
             // Update di tabel dosen jika ada record NIDN

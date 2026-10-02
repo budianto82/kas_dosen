@@ -145,6 +145,13 @@ const App = {
 
     const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
 
+    const getAvatarHtml = (photo, name, sizeClass = 'w-full h-full') => {
+      const initials = name ? name.substring(0, 2).toUpperCase() : 'SI';
+      if (!photo) return initials;
+      const src = photo.startsWith('data:') ? photo : `${photo}?v=${Date.now()}`;
+      return `<img src="${src}" class="${sizeClass} object-cover rounded-full" onerror="this.parentElement.textContent='${initials}'">`;
+    };
+
     if (this.state.user) {
       const u = this.state.user;
       const roleName = u.role ? u.role.toUpperCase() : 'DOSEN';
@@ -157,21 +164,36 @@ const App = {
         userNameEl.textContent = u.nama;
         userNameEl.title = u.nama;
       }
+
+      // 1. Avatar di Header Utama (Sticky Top Bar)
       if (userAvatarEl) {
         userAvatarEl.classList.remove('hidden');
-        if (u.foto) {
-          userAvatarEl.innerHTML = `<img src="${u.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
-        } else {
-          const initials = u.nama ? u.nama.substring(0, 2).toUpperCase() : 'SI';
-          userAvatarEl.textContent = initials;
+        userAvatarEl.innerHTML = getAvatarHtml(u.foto, u.nama);
+      }
+
+      // 2. Kartu Profil Pengguna di Header Dashboard (Tab Beranda)
+      const dashProfCard = document.getElementById('dashUserProfileCard');
+      if (dashProfCard) {
+        dashProfCard.classList.remove('hidden');
+        const dashAvatar = document.getElementById('dashUserAvatar');
+        const dashBadge = document.getElementById('dashUserRoleBadge');
+        const dashNama = document.getElementById('dashUserNama');
+        const dashNidn = document.getElementById('dashUserNidn');
+
+        if (dashBadge) dashBadge.textContent = roleName;
+        if (dashNama) dashNama.textContent = u.nama;
+        if (dashNidn) dashNidn.textContent = `NIDOS: ${nidos || '-'}`;
+        if (dashAvatar) {
+          dashAvatar.innerHTML = getAvatarHtml(u.foto, u.nama);
         }
       }
+
       if (authBtnEl) {
         authBtnEl.innerHTML = '<i data-lucide="log-out" class="w-4 h-4"></i>';
         authBtnEl.onclick = () => this.logout();
       }
 
-      // Update Kartu Profil Dosen di Tab Dosen
+      // 3. Kartu Profil Dosen di Tab Dosen
       const profCard = document.getElementById('userProfileCard');
       if (profCard) {
         profCard.classList.remove('hidden');
@@ -184,17 +206,20 @@ const App = {
         if (pNama) pNama.textContent = u.nama;
         if (pNidn) pNidn.textContent = `NIDOS: ${nidos}`;
         if (pPhoto) {
-          if (u.foto) {
-            pPhoto.innerHTML = `<img src="${u.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
-          } else {
-            pPhoto.textContent = u.nama ? u.nama.substring(0, 2).toUpperCase() : 'SI';
-          }
+          pPhoto.innerHTML = getAvatarHtml(u.foto, u.nama);
         }
       }
+
+      // Aktifkan timer logout otomatis (2 menit tidak ada aktivitas)
+      this.resetInactivityTimer();
     } else {
       if (userRoleEl) userRoleEl.textContent = 'MODE TERBUKA';
       if (userNameEl) userNameEl.textContent = 'Dosen / Civitas SI';
       if (userAvatarEl) userAvatarEl.classList.add('hidden');
+      
+      const dashProfCard = document.getElementById('dashUserProfileCard');
+      if (dashProfCard) dashProfCard.classList.add('hidden');
+
       const profCard = document.getElementById('userProfileCard');
       if (profCard) profCard.classList.add('hidden');
 
@@ -202,6 +227,9 @@ const App = {
         authBtnEl.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i>';
         authBtnEl.onclick = () => this.openModal('modalLogin');
       }
+
+      if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+      if (this.inactivityWarningTimer) clearTimeout(this.inactivityWarningTimer);
     }
 
     // Visibilitas tombol input khusus Bendahara / Kaprodi
@@ -332,6 +360,8 @@ const App = {
     }
 
     // Hapus sesi & token
+    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+    if (this.inactivityWarningTimer) clearTimeout(this.inactivityWarningTimer);
     localStorage.removeItem('kas_token');
     this.state.user = null;
     this.updateUserUI();
@@ -434,6 +464,62 @@ const App = {
         });
       }
     });
+
+    // Deteksi aktivitas user untuk auto-logout 2 menit jika idle
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => {
+      window.addEventListener(evt, () => this.resetInactivityTimer(), { passive: true });
+    });
+  },
+
+  // 3b. Inactivity Auto-Logout (2 Menit Idle)
+  inactivityTimer: null,
+  inactivityWarningTimer: null,
+
+  resetInactivityTimer() {
+    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+    if (this.inactivityWarningTimer) clearTimeout(this.inactivityWarningTimer);
+
+    if (!this.state.user) return;
+
+    // Peringatan 15 detik sebelum logout (105 detik)
+    this.inactivityWarningTimer = setTimeout(() => {
+      if (this.state.user) {
+        this.showToast('Tidak ada aktivitas. Akun akan logout otomatis dalam 15 detik.', 'info');
+      }
+    }, 105 * 1000);
+
+    // Logout otomatis tepat 2 menit (120 detik)
+    this.inactivityTimer = setTimeout(() => {
+      if (this.state.user) {
+        this.performAutoLogout();
+      }
+    }, 120 * 1000);
+  },
+
+  async performAutoLogout() {
+    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+    if (this.inactivityWarningTimer) clearTimeout(this.inactivityWarningTimer);
+
+    try {
+      await fetch('api/auth.php?action=logout');
+    } catch (e) {}
+
+    localStorage.removeItem('kas_token');
+    this.state.user = null;
+    this.updateUserUI();
+
+    // Tutup seluruh modal
+    document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+
+    // Pindah ke tab beranda & kunci tampilan
+    this.state.currentTab = 'beranda';
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      if (pane.id === 'tab-beranda') pane.classList.remove('hidden');
+      else pane.classList.add('hidden');
+    });
+    this.setAuthGated(true);
+    this.showToast('Sesi telah keluar otomatis karena tidak ada aktivitas selama 2 menit.', 'info');
   },
 
   // 4. Dashboard View

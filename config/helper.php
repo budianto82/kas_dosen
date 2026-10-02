@@ -26,20 +26,39 @@ function getAuthUser(): ?array {
         return $_SESSION['user'];
     }
 
-    // Ambil token dari header Authorization, Cookie, atau Request
+    // Ambil token dari header Authorization, X-Auth-Token, Cookie, atau Request
     $token = null;
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
+    
     if (empty($authHeader) && function_exists('getallheaders')) {
         $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        foreach ($headers as $k => $v) {
+            $lower = strtolower($k);
+            if ($lower === 'authorization' || $lower === 'x-auth-token') {
+                $authHeader = $v;
+                break;
+            }
+        }
     }
 
-    if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
-        $token = trim($matches[1]);
-    } elseif (!empty($_COOKIE['kas_token'])) {
+    if (!empty($authHeader)) {
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            $token = trim($matches[1]);
+        } elseif (strpos($authHeader, '.') !== false) {
+            $token = trim($authHeader);
+        }
+    }
+
+    if (empty($token) && !empty($_COOKIE['kas_token'])) {
         $token = $_COOKIE['kas_token'];
-    } elseif (!empty($_REQUEST['auth_token'])) {
+    }
+    
+    if (empty($token) && !empty($_REQUEST['auth_token'])) {
         $token = $_REQUEST['auth_token'];
+    }
+    
+    if (empty($token) && !empty($_POST['auth_token'])) {
+        $token = $_POST['auth_token'];
     }
 
     if (!empty($token)) {

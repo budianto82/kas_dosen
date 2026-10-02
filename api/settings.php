@@ -22,7 +22,7 @@ switch ($action) {
 
         $allowedKeys = [
             'nama_kampus', 'nama_fakultas', 'nama_prodi', 'nominal_iuran_bulanan',
-            'nama_bank', 'nomor_rekening', 'atas_nama', 'kontak_bendahara', 'nama_bendahara'
+            'nama_bank', 'nomor_rekening', 'atas_nama', 'kontak_bendahara', 'nama_bendahara', 'nidn_bendahara'
         ];
 
         $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);

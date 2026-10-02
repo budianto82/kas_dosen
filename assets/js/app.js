@@ -7,6 +7,7 @@
 const originalFetch = window.fetch;
 window.fetch = function(url, options = {}) {
   options = options || {};
+  options.credentials = options.credentials || 'same-origin';
   const token = localStorage.getItem('kas_token');
   if (token) {
     if (!options.headers) {
@@ -14,8 +15,10 @@ window.fetch = function(url, options = {}) {
     }
     if (options.headers instanceof Headers) {
       options.headers.set('Authorization', `Bearer ${token}`);
+      options.headers.set('X-Auth-Token', token);
     } else if (typeof options.headers === 'object') {
       options.headers['Authorization'] = `Bearer ${token}`;
+      options.headers['X-Auth-Token'] = token;
     }
   }
   return originalFetch(url, options);
@@ -109,6 +112,9 @@ const App = {
       const data = await res.json();
       if (data.status === 'success' && data.logged_in) {
         this.state.user = data.user;
+        if (data.token) {
+          localStorage.setItem('kas_token', data.token);
+        }
         this.setAuthGated(false);
       } else {
         this.state.user = null;
@@ -1248,7 +1254,7 @@ const App = {
     }
   },
 
-  // 10b. Foto Profil Upload Handlers
+  // 10b. Foto Profil Upload & Profile Settings Handlers
   async uploadFotoProfil(input) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
@@ -1261,11 +1267,13 @@ const App = {
 
     const formData = new FormData();
     formData.append('foto_profil', file);
+    formData.append('target', 'self');
+    const token = localStorage.getItem('kas_token');
+    if (token) {
+      formData.append('auth_token', token);
+    }
     if (this.state.user && this.state.user.nidn) {
       formData.append('nidn', this.state.user.nidn);
-    }
-    if (this.state.user && this.state.user.id) {
-      formData.append('dosen_id', this.state.user.id);
     }
 
     this.showToast('Mengunggah foto profil...', 'info');
@@ -1278,7 +1286,12 @@ const App = {
       const data = await res.json();
       if (data.status === 'success') {
         this.showToast(data.message, 'success');
-        if (this.state.user) {
+        if (data.token) {
+          localStorage.setItem('kas_token', data.token);
+        }
+        if (data.user) {
+          this.state.user = data.user;
+        } else if (this.state.user) {
           this.state.user.foto = data.foto;
         }
         this.updateUserUI();
@@ -1306,6 +1319,11 @@ const App = {
 
     const formData = new FormData();
     formData.append('foto_profil', file);
+    formData.append('target', 'dosen_detail');
+    const token = localStorage.getItem('kas_token');
+    if (token) {
+      formData.append('auth_token', token);
+    }
     if (this.activeDetailDosenId) {
       formData.append('dosen_id', this.activeDetailDosenId);
     }
@@ -1329,6 +1347,9 @@ const App = {
         }
         if (this.state.user && (this.state.user.nidn === this.activeDetailDosenNidn || this.state.user.id == this.activeDetailDosenId)) {
           this.state.user.foto = data.foto;
+          if (data.token) {
+            localStorage.setItem('kas_token', data.token);
+          }
           this.updateUserUI();
         }
         this.loadDosenList();
@@ -1340,6 +1361,141 @@ const App = {
       this.showToast('Terjadi kesalahan saat mengunggah foto.', 'error');
     } finally {
       input.value = '';
+    }
+  },
+
+  openEditProfileModal() {
+    if (!this.state.user) {
+      this.openModal('modalLogin');
+      return;
+    }
+    const u = this.state.user;
+    const isBendahara = ['bendahara', 'kaprodi'].includes(u.role);
+    const roleName = isBendahara ? 'BENDAHARA' : (u.role === 'kaprodi' ? 'KAPRODI' : 'DOSEN');
+
+    const badgeEl = document.getElementById('modalProfileBadge');
+    if (badgeEl) badgeEl.textContent = roleName;
+
+    const photoEl = document.getElementById('modalProfilePhotoPreview');
+    if (photoEl) {
+      if (u.foto) {
+        photoEl.innerHTML = `<img src="${u.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
+      } else {
+        photoEl.textContent = u.nama ? u.nama.substring(0, 2).toUpperCase() : 'SI';
+      }
+    }
+
+    const nidnEl = document.getElementById('editProfileNidn');
+    if (nidnEl) nidnEl.value = u.nidn || u.username || '-';
+
+    let rawNama = u.nama || '';
+    let gelar = u.gelar || '';
+    if (!gelar && rawNama.includes(',')) {
+      const parts = rawNama.split(',');
+      rawNama = parts[0].trim();
+      gelar = parts.slice(1).join(',').trim();
+    } else if (gelar && rawNama.includes(gelar)) {
+      rawNama = rawNama.replace(gelar, '').replace(/,\s*$/, '').trim();
+    }
+
+    const namaEl = document.getElementById('editProfileNama');
+    if (namaEl) namaEl.value = rawNama;
+
+    const gelarEl = document.getElementById('editProfileGelar');
+    if (gelarEl) gelarEl.value = gelar;
+
+    const noHpEl = document.getElementById('editProfileNoHp');
+    if (noHpEl) noHpEl.value = u.no_hp || '';
+
+    const emailEl = document.getElementById('editProfileEmail');
+    if (emailEl) emailEl.value = u.email || '';
+
+    const passBaru = document.getElementById('editProfilePasswordBaru');
+    if (passBaru) passBaru.value = '';
+    const passKonf = document.getElementById('editProfilePasswordKonf');
+    if (passKonf) passKonf.value = '';
+
+    const fileInput = document.getElementById('inputModalUploadFoto');
+    if (fileInput) fileInput.value = '';
+
+    this.openModal('modalEditProfile');
+    if (window.lucide) lucide.createIcons();
+  },
+
+  previewModalProfilePhoto(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      this.showToast('Ukuran foto maksimal 5MB.', 'error');
+      input.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const photoEl = document.getElementById('modalProfilePhotoPreview');
+      if (photoEl) {
+        photoEl.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  async submitUpdateProfile(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = document.getElementById('btnSubmitEditProfile');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="inline-block animate-spin mr-1">⌛</span> Menyimpan...';
+    }
+
+    const formData = new FormData(form);
+    const token = localStorage.getItem('kas_token');
+    if (token) {
+      formData.append('auth_token', token);
+    }
+
+    const passBaru = formData.get('password_baru');
+    const passKonf = formData.get('password_konfirmasi');
+    if (passBaru && passBaru !== passKonf) {
+      this.showToast('Konfirmasi kata sandi baru tidak cocok.', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i><span>Simpan Perubahan Profil</span>';
+        if (window.lucide) lucide.createIcons();
+      }
+      return;
+    }
+
+    try {
+      const res = await fetch('api/auth.php?action=update_profile', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        this.showToast(data.message, 'success');
+        if (data.token) {
+          localStorage.setItem('kas_token', data.token);
+        }
+        if (data.user) {
+          this.state.user = data.user;
+        }
+        this.updateUserUI();
+        this.loadDosenList();
+        this.closeModal('modalEditProfile');
+      } else {
+        this.showToast(data.message || 'Gagal menyimpan profil.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i><span>Simpan Perubahan Profil</span>';
+        if (window.lucide) lucide.createIcons();
+      }
     }
   },
 
@@ -1727,6 +1883,10 @@ const App = {
     const form = e.target;
     const formData = new FormData(form);
     const body = Object.fromEntries(formData.entries());
+    const token = localStorage.getItem('kas_token');
+    if (token) {
+      body.auth_token = token;
+    }
 
     const btn = document.getElementById('btnSubmitSettings');
     if (btn) btn.disabled = true;

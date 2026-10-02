@@ -86,19 +86,36 @@ switch ($action) {
         $u = getAuthUser();
         if ($u) {
             if (!empty($u['nidn'])) {
-                $stmtRef = $pdo->prepare("SELECT foto, nama, gelar FROM dosen WHERE nidn = ?");
+                $stmtRef = $pdo->prepare("SELECT id, foto, nama, gelar, no_hp, email FROM dosen WHERE nidn = ?");
                 $stmtRef->execute([$u['nidn']]);
                 $ref = $stmtRef->fetch();
                 if ($ref) {
                     if (!empty($ref['foto'])) $u['foto'] = $ref['foto'];
                     if (!empty($ref['nama'])) $u['nama'] = $ref['nama'] . ($ref['gelar'] ? ', ' . $ref['gelar'] : '');
+                    $u['gelar'] = $ref['gelar'] ?? '';
+                    $u['no_hp'] = $ref['no_hp'] ?? ($u['no_hp'] ?? '');
+                    $u['email'] = $ref['email'] ?? ($u['email'] ?? '');
+                    $u['dosen_id'] = $ref['id'];
+                }
+            }
+            if (!empty($u['id']) || !empty($u['username'])) {
+                $stmtUser = $pdo->prepare("SELECT foto, nama, no_hp, role FROM users WHERE id = ? OR username = ?");
+                $stmtUser->execute([$u['id'] ?? 0, $u['username'] ?? '']);
+                $uRow = $stmtUser->fetch();
+                if ($uRow) {
+                    if (!empty($uRow['foto'])) $u['foto'] = $uRow['foto'];
+                    if (!empty($uRow['role'])) $u['role'] = $uRow['role'];
+                    if (empty($u['nama']) && !empty($uRow['nama'])) $u['nama'] = $uRow['nama'];
                 }
             }
             $_SESSION['user'] = $u;
+            $newToken = generateAuthToken($u);
+            setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
             jsonResponse([
                 'status' => 'success',
                 'logged_in' => true,
-                'user' => $u
+                'user' => $u,
+                'token' => $newToken
             ]);
         } else {
             // Berikan mode guest/transparansi jika belum login
@@ -108,6 +125,118 @@ switch ($action) {
                 'user' => null
             ]);
         }
+        break;
+
+    case 'update_profile':
+        $u = requireAuth();
+        $input = getJsonInput();
+
+        $nama = trim($_POST['nama'] ?? ($input['nama'] ?? ''));
+        $gelar = trim($_POST['gelar'] ?? ($input['gelar'] ?? ''));
+        $no_hp = trim($_POST['no_hp'] ?? ($input['no_hp'] ?? ''));
+        $email = trim($_POST['email'] ?? ($input['email'] ?? ''));
+        $password_lama = trim($_POST['password_lama'] ?? ($input['password_lama'] ?? ''));
+        $password_baru = trim($_POST['password_baru'] ?? ($input['password_baru'] ?? ''));
+        $password_konfirmasi = trim($_POST['password_konfirmasi'] ?? ($input['password_konfirmasi'] ?? ''));
+
+        if (empty($nama)) {
+            jsonResponse(['status' => 'error', 'message' => 'Nama Lengkap wajib diisi.'], 400);
+        }
+
+        $newHash = null;
+        if (!empty($password_baru)) {
+            if (strlen($password_baru) < 4) {
+                jsonResponse(['status' => 'error', 'message' => 'Password baru minimal 4 karakter.'], 400);
+            }
+            if ($password_baru !== $password_konfirmasi) {
+                jsonResponse(['status' => 'error', 'message' => 'Konfirmasi password baru tidak cocok.'], 400);
+            }
+
+            // Jika ada password lama, validasi
+            $currentUsername = $u['username'] ?? ($u['nidn'] ?? '');
+            $stmtCek = $pdo->prepare("SELECT * FROM users WHERE username = ? OR nidn = ?");
+            $stmtCek->execute([$currentUsername, $u['nidn'] ?? '']);
+            $existingUser = $stmtCek->fetch();
+
+            if ($existingUser && !empty($existingUser['password_hash'])) {
+                if (!empty($password_lama) && !password_verify($password_lama, $existingUser['password_hash']) && $password_lama !== $existingUser['username'] && $password_lama !== $existingUser['nidn'] && $password_lama !== 'unpam123') {
+                    jsonResponse(['status' => 'error', 'message' => 'Password lama tidak sesuai.'], 400);
+                }
+            }
+
+            $newHash = password_hash($password_baru, PASSWORD_DEFAULT);
+        }
+
+        // Cek jika ada upload foto langsung di form update profil
+        $fotoPath = null;
+        if (isset($_FILES['foto_profil']) && $_FILES['foto_profil']['error'] === UPLOAD_ERR_OK) {
+            $fotoPath = handleFileUpload('foto_profil', 'foto_profil');
+        }
+
+        // 1. Update tabel dosen jika user memiliki NIDN atau ada di tabel dosen
+        $nidn = $u['nidn'] ?? '';
+        if (!empty($nidn)) {
+            $sqlDosen = "UPDATE dosen SET nama = ?, gelar = ?, no_hp = ?, email = ?";
+            $paramsDosen = [$nama, $gelar, $no_hp, $email];
+            if ($fotoPath) {
+                $sqlDosen .= ", foto = ?";
+                $paramsDosen[] = $fotoPath;
+            }
+            $sqlDosen .= " WHERE nidn = ?";
+            $paramsDosen[] = $nidn;
+            $stmtD = $pdo->prepare($sqlDosen);
+            $stmtD->execute($paramsDosen);
+        }
+
+        // 2. Update tabel users
+        $namaLengkap = $nama . ($gelar ? ', ' . $gelar : '');
+        $userId = $u['id'] ?? 0;
+        $username = $u['username'] ?? '';
+
+        $stmtUserCheck = $pdo->prepare("SELECT id FROM users WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
+        $stmtUserCheck->execute([$userId, $username, $nidn]);
+        $foundUserId = $stmtUserCheck->fetchColumn();
+
+        if ($foundUserId) {
+            $sqlU = "UPDATE users SET nama = ?, no_hp = ?";
+            $paramsU = [$namaLengkap, $no_hp];
+            if ($newHash) {
+                $sqlU .= ", password_hash = ?";
+                $paramsU[] = $newHash;
+            }
+            if ($fotoPath) {
+                $sqlU .= ", foto = ?";
+                $paramsU[] = $fotoPath;
+            }
+            $sqlU .= " WHERE id = ?";
+            $paramsU[] = $foundUserId;
+            $stmtUp = $pdo->prepare($sqlU);
+            $stmtUp->execute($paramsU);
+        } elseif ($newHash && !empty($nidn)) {
+            // Jika dosen belum ada di tabel users tapi ingin ganti password
+            $stmtIns = $pdo->prepare("INSERT INTO users (username, password_hash, nama, role, nidn, no_hp, foto) VALUES (?, ?, ?, 'dosen', ?, ?, ?)");
+            $stmtIns->execute([$nidn, $newHash, $namaLengkap, $nidn, $no_hp, $fotoPath ?? ($u['foto'] ?? null)]);
+        }
+
+        // Update session
+        $u['nama'] = $namaLengkap;
+        $u['gelar'] = $gelar;
+        $u['no_hp'] = $no_hp;
+        $u['email'] = $email;
+        if ($fotoPath) {
+            $u['foto'] = $fotoPath;
+        }
+
+        $_SESSION['user'] = $u;
+        $newToken = generateAuthToken($u);
+        setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
+
+        jsonResponse([
+            'status' => 'success',
+            'message' => 'Profil dan setingan berhasil disimpan!',
+            'user' => $u,
+            'token' => $newToken
+        ]);
         break;
 
     default:

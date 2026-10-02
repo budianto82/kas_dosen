@@ -178,67 +178,87 @@ switch ($action) {
         break;
 
     case 'upload_foto':
-        if (!isset($_SESSION['user'])) {
-            jsonResponse(['status' => 'error', 'message' => 'Silakan login terlebih dahulu.'], 401);
-        }
+        $currentUser = requireAuth();
 
-        $currentUser = $_SESSION['user'];
+        $target = trim($_POST['target'] ?? '');
         $dosenId = (int)($_POST['dosen_id'] ?? 0);
         $nidn = trim($_POST['nidn'] ?? '');
-
-        // Jika dosen_id dan nidn kosong, gunakan data user yang sedang login
-        if (!$dosenId && empty($nidn) && !empty($currentUser['nidn'])) {
-            $stmtFind = $pdo->prepare("SELECT id FROM dosen WHERE nidn = ?");
-            $stmtFind->execute([$currentUser['nidn']]);
-            $dosenId = (int)$stmtFind->fetchColumn();
-            $nidn = $currentUser['nidn'];
-        } elseif (!$dosenId && !empty($nidn)) {
-            $stmtFind = $pdo->prepare("SELECT id FROM dosen WHERE nidn = ?");
-            $stmtFind->execute([$nidn]);
-            $dosenId = (int)$stmtFind->fetchColumn();
-        } elseif ($dosenId && empty($nidn)) {
-            $stmtFind = $pdo->prepare("SELECT nidn FROM dosen WHERE id = ?");
-            $stmtFind->execute([$dosenId]);
-            $nidn = $stmtFind->fetchColumn() ?: '';
-        }
-
-        $isBendahara = in_array($currentUser['role'] ?? '', ['bendahara', 'kaprodi']);
-        // Jika bukan bendahara/kaprodi, hanya boleh upload fotonya sendiri
-        if (!$isBendahara) {
-            $currentDosenId = $currentUser['id'] ?? 0;
-            $currentNidn = $currentUser['nidn'] ?? '';
-            if ($dosenId != $currentDosenId && $nidn != $currentNidn) {
-                jsonResponse(['status' => 'error', 'message' => 'Anda hanya berhak mengubah foto profil Anda sendiri.'], 403);
-            }
-        }
 
         $fotoPath = handleFileUpload('foto_profil', 'foto_profil');
         if (!$fotoPath) {
             jsonResponse(['status' => 'error', 'message' => 'Gagal mengupload foto. Pastikan format JPG, PNG, atau WEBP dan ukuran maksimal 5MB.'], 400);
         }
 
-        // Update foto di tabel dosen
-        if ($dosenId) {
-            $stmtUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE id = ?");
-            $stmtUpdate->execute([$fotoPath, $dosenId]);
-        }
+        $isBendahara = in_array($currentUser['role'] ?? '', ['bendahara', 'kaprodi']);
 
-        // Update foto di tabel users jika akunnya terdaftar
-        if (!empty($nidn)) {
-            $stmtUserUpdate = $pdo->prepare("UPDATE users SET foto = ? WHERE nidn = ? OR username = ?");
-            $stmtUserUpdate->execute([$fotoPath, $nidn, $nidn]);
-        }
+        // Jika upload foto untuk detail dosen tertentu oleh bendahara
+        if ($target === 'dosen_detail' && $dosenId > 0) {
+            if (!$isBendahara) {
+                jsonResponse(['status' => 'error', 'message' => 'Hanya bendahara yang berhak mengubah foto dosen lain.'], 403);
+            }
 
-        // Jika user yang login sedang mengupdate fotonya sendiri, perbarui session
-        if (($currentUser['nidn'] ?? '') === $nidn || ($currentUser['id'] ?? 0) == $dosenId || ($currentUser['username'] ?? '') === $nidn) {
+            $stmtD = $pdo->prepare("SELECT id, nidn FROM dosen WHERE id = ?");
+            $stmtD->execute([$dosenId]);
+            $targetDosen = $stmtD->fetch();
+
+            if ($targetDosen) {
+                $stmtUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE id = ?");
+                $stmtUpdate->execute([$fotoPath, $dosenId]);
+
+                if (!empty($targetDosen['nidn'])) {
+                    $stmtUserUpdate = $pdo->prepare("UPDATE users SET foto = ? WHERE nidn = ? OR username = ?");
+                    $stmtUserUpdate->execute([$fotoPath, $targetDosen['nidn'], $targetDosen['nidn']]);
+                }
+
+                if (($currentUser['nidn'] ?? '') === $targetDosen['nidn']) {
+                    $_SESSION['user']['foto'] = $fotoPath;
+                    $currentUser['foto'] = $fotoPath;
+                    $newToken = generateAuthToken($_SESSION['user']);
+                    setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
+                }
+            }
+
+            jsonResponse([
+                'status' => 'success',
+                'message' => 'Foto dosen berhasil diunggah!',
+                'foto' => $fotoPath
+            ]);
+        } else {
+            // Upload foto profil akun sendiri (Self)
+            $userNidn = $currentUser['nidn'] ?? '';
+            $userId = (int)($currentUser['id'] ?? 0);
+            $username = $currentUser['username'] ?? '';
+
+            // Update di tabel users
+            if ($userId || !empty($username) || !empty($userNidn)) {
+                $stmtUserUpdate = $pdo->prepare("SELECT id FROM users WHERE id = ? OR username = ? OR (nidn IS NOT NULL AND nidn != '' AND nidn = ?)");
+                $stmtUserUpdate->execute([$userId, $username, $userNidn]);
+                $uId = $stmtUserUpdate->fetchColumn();
+                if ($uId) {
+                    $stmtUp = $pdo->prepare("UPDATE users SET foto = ? WHERE id = ?");
+                    $stmtUp->execute([$fotoPath, $uId]);
+                }
+            }
+
+            // Update di tabel dosen jika ada record NIDN
+            if (!empty($userNidn)) {
+                $stmtDosenUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE nidn = ?");
+                $stmtDosenUpdate->execute([$fotoPath, $userNidn]);
+            }
+
             $_SESSION['user']['foto'] = $fotoPath;
-        }
+            $currentUser['foto'] = $fotoPath;
+            $newToken = generateAuthToken($_SESSION['user']);
+            setcookie('kas_token', $newToken, time() + (86400 * 30), '/', '', false, false);
 
-        jsonResponse([
-            'status' => 'success',
-            'message' => 'Foto profil berhasil diunggah!',
-            'foto' => $fotoPath
-        ]);
+            jsonResponse([
+                'status' => 'success',
+                'message' => 'Foto profil berhasil diunggah!',
+                'foto' => $fotoPath,
+                'user' => $currentUser,
+                'token' => $newToken
+            ]);
+        }
         break;
 
     default:

@@ -429,11 +429,22 @@ $isLoggedIn = !empty($authUser);
       <section id="tab-dosen" class="tab-pane hidden space-y-4">
         
         <!-- Kartu Profil Dosen yang Sedang Login -->
-        <div id="userProfileCard" class="bg-gradient-to-br from-blue-900 via-blue-950 to-slate-900 text-white rounded-2xl p-4 shadow-sm border border-blue-800/40 space-y-3 hidden">
+        <div id="userProfileCard" class="bg-gradient-to-br from-blue-900 via-blue-950 to-slate-900 text-white rounded-2xl p-4 shadow-sm border border-blue-800/40 space-y-3 <?= $isLoggedIn ? '' : 'hidden' ?>">
           <div class="flex items-center gap-3.5">
             <div class="relative flex-shrink-0">
               <div id="userProfilePhotoPreview" class="w-14 h-14 rounded-full bg-amber-400 text-slate-950 font-extrabold text-base flex items-center justify-center overflow-hidden border-2 border-white/30 shadow-md">
-                <!-- Foto or Initials -->
+                <?php if ($isLoggedIn): ?>
+                  <?php
+                    $initials = strtoupper(substr($authUser['nama'] ?? 'SI', 0, 2));
+                    $foto = $authUser['foto'] ?? '';
+                    if (!empty($foto)):
+                      $src = str_starts_with($foto, 'data:') ? $foto : htmlspecialchars($foto) . '?v=' . time();
+                  ?>
+                    <img src="<?= $src ?>" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.parentElement.textContent='<?= $initials ?>'">
+                  <?php else: ?>
+                    <?= $initials ?>
+                  <?php endif; ?>
+                <?php endif; ?>
               </div>
               <label for="inputUploadFotoProfil" class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-900 flex items-center justify-center cursor-pointer shadow-md transition-transform active:scale-95" title="Ganti Foto Profil">
                 <i data-lucide="camera" class="w-3.5 h-3.5"></i>
@@ -442,10 +453,10 @@ $isLoggedIn = !empty($authUser);
             </div>
             <div class="flex-1 min-w-0">
               <span id="userProfileBadge" class="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-400 text-slate-900 tracking-wider mb-1">
-                BENDAHARA
+                <?= strtoupper($authUser['role'] ?? 'BENDAHARA') ?>
               </span>
-              <h3 id="userProfileNama" class="text-xs sm:text-sm font-bold text-white truncate leading-tight">Nama Dosen</h3>
-              <p id="userProfileNidn" class="text-[11px] text-blue-200 font-mono mt-0.5">NIDOS: -</p>
+              <h3 id="userProfileNama" class="text-xs sm:text-sm font-bold text-white truncate leading-tight"><?= htmlspecialchars($authUser['nama'] ?? 'Nama Dosen') ?></h3>
+              <p id="userProfileNidn" class="text-[11px] text-blue-200 font-mono mt-0.5">NIDOS: <?= htmlspecialchars($authUser['nidn'] ?? ($authUser['username'] ?? '-')) ?></p>
             </div>
           </div>
           <div class="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">

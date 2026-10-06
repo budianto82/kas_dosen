@@ -221,8 +221,9 @@ try {
             }
 
             // 1. Update tabel dosen jika user memiliki NIDN atau ada di tabel dosen
-            $nidn = $u['nidn'] ?? '';
-            if (!empty($nidn)) {
+            $targetNidn = trim((string)(!empty($u['nidn']) ? $u['nidn'] : ($u['username'] ?? '')));
+            $dosenId = (int)($u['dosen_id'] ?? 0);
+            if (!empty($targetNidn) || $dosenId > 0) {
                 try {
                     $sqlDosen = "UPDATE dosen SET nama = ?, gelar = ?, no_hp = ?, email = ?";
                     $paramsDosen = [$nama, $gelar, $no_hp, $email];
@@ -230,8 +231,19 @@ try {
                         $sqlDosen .= ", foto = ?";
                         $paramsDosen[] = $fotoPath;
                     }
-                    $sqlDosen .= " WHERE nidn = ?";
-                    $paramsDosen[] = $nidn;
+                    if (!empty($targetNidn) && $dosenId > 0) {
+                        $sqlDosen .= " WHERE nidn = ? OR nidn = ? OR id = ?";
+                        $paramsDosen[] = $targetNidn;
+                        $paramsDosen[] = ltrim($targetNidn, '0');
+                        $paramsDosen[] = $dosenId;
+                    } elseif (!empty($targetNidn)) {
+                        $sqlDosen .= " WHERE nidn = ? OR nidn = ?";
+                        $paramsDosen[] = $targetNidn;
+                        $paramsDosen[] = ltrim($targetNidn, '0');
+                    } else {
+                        $sqlDosen .= " WHERE id = ?";
+                        $paramsDosen[] = $dosenId;
+                    }
                     $stmtD = $pdo->prepare($sqlDosen);
                     $stmtD->execute($paramsDosen);
                 } catch (Throwable $e) {}

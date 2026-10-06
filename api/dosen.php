@@ -42,8 +42,35 @@ switch ($action) {
         $stmt->execute($params);
         $dosenList = $stmt->fetchAll();
 
+        // Ambil mapping foto dari users untuk fallback dosen yang fotonya tersimpan di tabel users / profil
+        $userPhotos = [];
+        try {
+            $uStmt = $pdo->query("SELECT nidn, username, foto FROM users WHERE foto IS NOT NULL AND foto != ''");
+            while ($uRow = $uStmt->fetch()) {
+                if (!empty($uRow['nidn'])) {
+                    $nidnClean = trim($uRow['nidn']);
+                    $userPhotos[$nidnClean] = $uRow['foto'];
+                    $userPhotos[ltrim($nidnClean, '0')] = $uRow['foto'];
+                }
+                if (!empty($uRow['username'])) {
+                    $uNameClean = trim($uRow['username']);
+                    $userPhotos[$uNameClean] = $uRow['foto'];
+                    $userPhotos[ltrim($uNameClean, '0')] = $uRow['foto'];
+                }
+            }
+        } catch (Throwable $e) {}
+
         // Format data dosen
         foreach ($dosenList as &$d) {
+            $nidnClean = trim((string)($d['nidn'] ?? ''));
+            $uPhoto = $userPhotos[$nidnClean] ?? ($userPhotos[ltrim($nidnClean, '0')] ?? null);
+            if (empty($d['foto']) && !empty($uPhoto)) {
+                $d['foto'] = $uPhoto;
+            } elseif (!empty($uPhoto) && str_starts_with($uPhoto, 'data:') && !str_starts_with((string)$d['foto'], 'data:')) {
+                // Utamakan Base64 Data URI jika tersimpan di profil user
+                $d['foto'] = $uPhoto;
+            }
+
             $d['nama_lengkap'] = $d['nama'] . ($d['gelar'] ? ', ' . $d['gelar'] : '');
             $d['lunas_bulan_ini'] = (int)$d['status_bulan_ini'] > 0;
             $d['total_kontribusi_formatted'] = formatRupiah($d['total_kontribusi']);
@@ -70,6 +97,21 @@ switch ($action) {
 
         if (!$dosen) {
             jsonResponse(['status' => 'error', 'message' => 'Data dosen tidak ditemukan.'], 404);
+        }
+
+        // Sinkronkan fallback foto dengan tabel users
+        if (!empty($dosen['nidn'])) {
+            try {
+                $nidnClean = trim($dosen['nidn']);
+                $uStmt = $pdo->prepare("SELECT foto FROM users WHERE (nidn = ? OR username = ? OR nidn = ? OR username = ?) AND foto IS NOT NULL AND foto != '' ORDER BY id DESC LIMIT 1");
+                $uStmt->execute([$nidnClean, $nidnClean, ltrim($nidnClean, '0'), ltrim($nidnClean, '0')]);
+                $uPhoto = $uStmt->fetchColumn();
+                if (empty($dosen['foto']) && !empty($uPhoto)) {
+                    $dosen['foto'] = $uPhoto;
+                } elseif (!empty($uPhoto) && str_starts_with($uPhoto, 'data:') && !str_starts_with((string)$dosen['foto'], 'data:')) {
+                    $dosen['foto'] = $uPhoto;
+                }
+            } catch (Throwable $e) {}
         }
 
         $dosen['nama_lengkap'] = $dosen['nama'] . ($dosen['gelar'] ? ', ' . $dosen['gelar'] : '');
@@ -242,10 +284,15 @@ switch ($action) {
                     $stmtUp->execute([$fotoPath, $userId, $username, $userNidn]);
                 }
 
-                // Update di tabel dosen jika ada record NIDN
-                if (!empty($userNidn)) {
-                    $stmtDosenUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE nidn = ?");
-                    $stmtDosenUpdate->execute([$fotoPath, $userNidn]);
+                // Update di tabel dosen jika ada record NIDN atau dosen_id
+                $dosenNidn = !empty($userNidn) ? $userNidn : $username;
+                if (!empty($dosenNidn)) {
+                    $stmtDosenUpdate = $pdo->prepare("UPDATE dosen SET foto = ? WHERE nidn = ? OR nidn = ?");
+                    $stmtDosenUpdate->execute([$fotoPath, $dosenNidn, ltrim($dosenNidn, '0')]);
+                }
+                if (!empty($currentUser['dosen_id'])) {
+                    $stmtDosenId = $pdo->prepare("UPDATE dosen SET foto = ? WHERE id = ?");
+                    $stmtDosenId->execute([$fotoPath, (int)$currentUser['dosen_id']]);
                 }
             } catch (Throwable $e) {}
 

@@ -146,6 +146,17 @@ const App = {
     }
   },
 
+  getAvatarHtml(photo, name, sizeClass = 'w-full h-full') {
+    const initials = name 
+      ? (name.trim().split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || name.substring(0, 2).toUpperCase()) 
+      : 'SI';
+    if (!photo || !String(photo).trim()) return initials;
+    const cleanPhoto = String(photo).trim();
+    // Jika Base64 Data URI, JANGAN tambahkan parameter query string ?v= agar gambar tidak rusak
+    const src = cleanPhoto.startsWith('data:') ? cleanPhoto : `${cleanPhoto}?v=${Date.now()}`;
+    return `<img src="${src}" class="${sizeClass} object-cover rounded-full" onerror="this.onerror=null; this.parentElement.innerHTML='${initials}'">`;
+  },
+
   updateUserUI() {
     const userRoleEl = document.getElementById('userRoleBadge');
     const userNameEl = document.getElementById('userNameDisplay');
@@ -153,13 +164,6 @@ const App = {
     const authBtnEl = document.getElementById('authActionBtn');
 
     const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
-
-    const getAvatarHtml = (photo, name, sizeClass = 'w-full h-full') => {
-      const initials = name ? name.substring(0, 2).toUpperCase() : 'SI';
-      if (!photo) return initials;
-      const src = photo.startsWith('data:') ? photo : `${photo}?v=${Date.now()}`;
-      return `<img src="${src}" class="${sizeClass} object-cover rounded-full" onerror="this.parentElement.textContent='${initials}'">`;
-    };
 
     if (this.state.user) {
       const u = this.state.user;
@@ -177,7 +181,7 @@ const App = {
       // 1. Avatar di Header Utama (Sticky Top Bar)
       if (userAvatarEl) {
         userAvatarEl.classList.remove('hidden');
-        userAvatarEl.innerHTML = getAvatarHtml(u.foto, u.nama);
+        userAvatarEl.innerHTML = this.getAvatarHtml(u.foto, u.nama);
       }
 
       // 2. Kartu Profil Pengguna di Header Dashboard (Tab Beranda)
@@ -193,7 +197,7 @@ const App = {
         if (dashNama) dashNama.textContent = u.nama;
         if (dashNidn) dashNidn.textContent = `NIDOS: ${nidos || '-'}`;
         if (dashAvatar) {
-          dashAvatar.innerHTML = getAvatarHtml(u.foto, u.nama);
+          dashAvatar.innerHTML = this.getAvatarHtml(u.foto, u.nama);
         }
       }
 
@@ -215,7 +219,7 @@ const App = {
         if (pNama) pNama.textContent = u.nama;
         if (pNidn) pNidn.textContent = `NIDOS: ${nidos}`;
         if (pPhoto) {
-          pPhoto.innerHTML = getAvatarHtml(u.foto, u.nama);
+          pPhoto.innerHTML = this.getAvatarHtml(u.foto, u.nama);
         }
       }
 
@@ -1164,11 +1168,20 @@ const App = {
     const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
     const myNidn = this.state.user ? this.state.user.nidn : '';
 
-    container.innerHTML = list.map(d => `
+    container.innerHTML = list.map(d => {
+      // Pastikan jika foto dosen di list kosong tapi akun yang sedang login adalah dosen ini, gunakan foto profil dashboard
+      const isMe = this.state.user && (
+        (this.state.user.nidn && String(this.state.user.nidn).trim() === String(d.nidn).trim()) || 
+        (this.state.user.username && String(this.state.user.username).trim() === String(d.nidn).trim())
+      );
+      const foto = (d.foto && String(d.foto).trim()) ? d.foto : (isMe && this.state.user.foto ? this.state.user.foto : null);
+      const avatarHtml = this.getAvatarHtml(foto, d.nama);
+
+      return `
       <div class="p-3.5 bg-white rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-blue-900 text-amber-400 font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden border border-slate-200">
-            ${d.foto ? `<img src="${d.foto}?v=${Date.now()}" class="w-full h-full object-cover">` : d.nama.substring(0, 2).toUpperCase()}
+            ${avatarHtml}
           </div>
           <div>
             <div class="text-xs font-bold text-slate-800">${d.nama_lengkap}</div>
@@ -1202,7 +1215,8 @@ const App = {
           ` : ''}
         </div>
       </div>
-    `).join('');
+      `;
+    }).join('');
 
     if (window.lucide) lucide.createIcons();
   },
@@ -1376,17 +1390,20 @@ const App = {
 
         this.activeDetailDosenId = d.id;
         this.activeDetailDosenNidn = d.nidn;
+        this.activeDetailDosenNama = d.nama;
 
         document.getElementById('modalDetailDosenTitle').textContent = d.nama_lengkap;
         document.getElementById('modalDetailDosenNidn').textContent = `NIDOS: ${d.nidn}${d.no_hp ? ' • ' + d.no_hp : ''}`;
 
+        const isMe = this.state.user && (
+          (this.state.user.nidn && String(this.state.user.nidn).trim() === String(d.nidn).trim()) || 
+          (this.state.user.username && String(this.state.user.username).trim() === String(d.nidn).trim())
+        );
+        const foto = (d.foto && String(d.foto).trim()) ? d.foto : (isMe && this.state.user.foto ? this.state.user.foto : null);
+
         const photoEl = document.getElementById('modalDetailDosenFoto');
         if (photoEl) {
-          if (d.foto) {
-            photoEl.innerHTML = `<img src="${d.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
-          } else {
-            photoEl.textContent = d.nama.substring(0, 2).toUpperCase();
-          }
+          photoEl.innerHTML = this.getAvatarHtml(foto, d.nama);
         }
 
         const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
@@ -1763,7 +1780,7 @@ const App = {
         this.showToast(data.message, 'success');
         const modalFoto = document.getElementById('modalDetailDosenFoto');
         if (modalFoto) {
-          modalFoto.innerHTML = `<img src="${data.foto || dataUri}" class="w-full h-full object-cover">`;
+          modalFoto.innerHTML = this.getAvatarHtml(data.foto || dataUri, this.activeDetailDosenNama || 'DS');
         }
         this.loadDosenList();
       } else {
@@ -1791,11 +1808,7 @@ const App = {
 
     const photoEl = document.getElementById('modalProfilePhotoPreview');
     if (photoEl) {
-      if (u.foto) {
-        photoEl.innerHTML = `<img src="${u.foto}?v=${Date.now()}" class="w-full h-full object-cover">`;
-      } else {
-        photoEl.textContent = u.nama ? u.nama.substring(0, 2).toUpperCase() : 'SI';
-      }
+      photoEl.innerHTML = this.getAvatarHtml(u.foto, u.nama);
     }
 
     const nidnEl = document.getElementById('editProfileNidn');
@@ -1841,7 +1854,7 @@ const App = {
     const dataUri = await this.imageFileToCompressedDataUrl(rawFile, 320, 0.82);
     const photoEl = document.getElementById('modalProfilePhotoPreview');
     if (photoEl && dataUri) {
-      photoEl.innerHTML = `<img src="${dataUri}" class="w-full h-full object-cover">`;
+      photoEl.innerHTML = this.getAvatarHtml(dataUri, this.state.user ? this.state.user.nama : 'SI');
     }
   },
 

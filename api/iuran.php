@@ -213,55 +213,90 @@ switch ($action) {
         break;
 
     case 'submit_transfer':
-        $input = getJsonInput();
-        $dosenId = (int)($input['dosen_id'] ?? 0);
-        $bulan = (int)($input['bulan'] ?? date('n'));
-        $tahun = (int)($input['tahun'] ?? date('Y'));
-        $keterangan = trim($input['keterangan'] ?? 'Transfer via Mobile');
-        $bukti = $input['bukti_bayar'] ?? '';
+        try {
+            $input = getJsonInput();
+            $dosenId = (int)($input['dosen_id'] ?? 0);
+            $nidn = trim((string)($input['nidn'] ?? ''));
+            $bulan = (int)($input['bulan'] ?? date('n'));
+            $tahun = (int)($input['tahun'] ?? date('Y'));
+            $keterangan = trim($input['keterangan'] ?? 'Transfer via Mobile');
+            $bukti = $input['bukti_bayar'] ?? '';
 
-        // Jika upload file gambar langsung
-        if (isset($_FILES['bukti_bayar']) && $_FILES['bukti_bayar']['error'] === UPLOAD_ERR_OK) {
-            $uploadedPath = handleFileUpload('bukti_bayar', 'bukti_bayar');
-            if ($uploadedPath) {
-                $bukti = $uploadedPath;
+            // Jika dosenId belum ada tapi nidn ada, cari dosen_id berdasarkan nidn
+            if (!$dosenId && !empty($nidn)) {
+                $stmtFindDosen = $pdo->prepare("SELECT id FROM dosen WHERE nidn = ? OR nidn = ? LIMIT 1");
+                $stmtFindDosen->execute([$nidn, ltrim($nidn, '0')]);
+                $dosenId = (int)$stmtFindDosen->fetchColumn();
             }
-        }
 
-        if (!$dosenId) {
-            jsonResponse(['status' => 'error', 'message' => 'Pilih data dosen terlebih dahulu.'], 400);
-        }
-        if ($bulan < 1 || $bulan > 12) {
-            jsonResponse(['status' => 'error', 'message' => 'Bulan iuran tidak valid.'], 400);
-        }
-        if (empty($bukti)) {
-            jsonResponse(['status' => 'error', 'message' => 'Foto bukti transfer wajib dilampirkan.'], 400);
-        }
-
-        // Ambil tarif iuran bulanan dari pengaturan (default 20000)
-        $tarifIuran = (float)($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 20000);
-
-        // Cek apakah sudah pernah bayar pada periode ini
-        $stmtCheck = $pdo->prepare("SELECT id, status FROM iuran WHERE dosen_id = ? AND bulan = ? AND tahun = ?");
-        $stmtCheck->execute([$dosenId, $bulan, $tahun]);
-        $existing = $stmtCheck->fetch();
-
-        $tanggalNow = date('Y-m-d');
-        if ($existing) {
-            if ($existing['status'] === 'lunas') {
-                jsonResponse(['status' => 'error', 'message' => 'Iuran untuk bulan dan tahun ini sudah berstatus LUNAS.'], 400);
+            // Jika user sedang login sebagai dosen dan dosenId belum ada
+            if (!$dosenId) {
+                $curUser = getAuthUser();
+                if ($curUser) {
+                    if (!empty($curUser['dosen_id'])) {
+                        $dosenId = (int)$curUser['dosen_id'];
+                    } elseif (!empty($curUser['nidn'])) {
+                        $stmtFindDosen = $pdo->prepare("SELECT id FROM dosen WHERE nidn = ? OR nidn = ? LIMIT 1");
+                        $stmtFindDosen->execute([$curUser['nidn'], ltrim($curUser['nidn'], '0')]);
+                        $dosenId = (int)$stmtFindDosen->fetchColumn();
+                    }
+                }
             }
-            $stmtUpdate = $pdo->prepare("UPDATE iuran SET nominal = ?, tanggal_bayar = ?, metode_bayar = 'transfer', bukti_bayar = ?, status = 'pending', keterangan = ? WHERE id = ?");
-            $stmtUpdate->execute([$tarifIuran, $tanggalNow, $bukti, $keterangan, $existing['id']]);
-        } else {
-            $stmtInsert = $pdo->prepare("INSERT INTO iuran (dosen_id, bulan, tahun, nominal, tanggal_bayar, metode_bayar, bukti_bayar, status, keterangan) VALUES (?, ?, ?, ?, ?, 'transfer', ?, 'pending', ?)");
-            $stmtInsert->execute([$dosenId, $bulan, $tahun, $tarifIuran, $tanggalNow, $bukti, $keterangan]);
-        }
 
-        jsonResponse([
-            'status' => 'success',
-            'message' => 'Bukti transfer berhasil dikirim! Menunggu validasi oleh Bendahara.'
-        ]);
+            // Jika upload file gambar langsung
+            if (isset($_FILES['bukti_bayar']) && $_FILES['bukti_bayar']['error'] === UPLOAD_ERR_OK) {
+                $uploadedPath = handleFileUpload('bukti_bayar', 'bukti_bayar');
+                if ($uploadedPath) {
+                    $bukti = $uploadedPath;
+                }
+            }
+
+            if (!$dosenId) {
+                jsonResponse(['status' => 'error', 'message' => 'Pilih data dosen terlebih dahulu.'], 400);
+            }
+            if ($bulan < 1 || $bulan > 12) {
+                jsonResponse(['status' => 'error', 'message' => 'Bulan iuran tidak valid.'], 400);
+            }
+            if (empty($bukti)) {
+                jsonResponse(['status' => 'error', 'message' => 'Foto bukti transfer wajib dilampirkan.'], 400);
+            }
+
+            // Ambil tarif iuran bulanan dari pengaturan (default 20000 atau 30000)
+            $tarifIuran = 20000.0;
+            try {
+                $valTarif = $pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn();
+                if ($valTarif && (float)$valTarif > 0) {
+                    $tarifIuran = (float)$valTarif;
+                }
+            } catch (Throwable $e) {}
+
+            // Cek apakah sudah pernah bayar pada periode ini
+            $stmtCheck = $pdo->prepare("SELECT id, status FROM iuran WHERE dosen_id = ? AND bulan = ? AND tahun = ?");
+            $stmtCheck->execute([$dosenId, $bulan, $tahun]);
+            $existing = $stmtCheck->fetch();
+
+            $tanggalNow = date('Y-m-d');
+            if ($existing) {
+                if ($existing['status'] === 'lunas') {
+                    jsonResponse(['status' => 'error', 'message' => 'Iuran untuk bulan dan tahun ini sudah berstatus LUNAS.'], 400);
+                }
+                $stmtUpdate = $pdo->prepare("UPDATE iuran SET nominal = ?, tanggal_bayar = ?, metode_bayar = 'transfer', bukti_bayar = ?, status = 'pending', keterangan = ? WHERE id = ?");
+                $stmtUpdate->execute([$tarifIuran, $tanggalNow, $bukti, $keterangan, $existing['id']]);
+            } else {
+                $stmtInsert = $pdo->prepare("INSERT INTO iuran (dosen_id, bulan, tahun, nominal, tanggal_bayar, metode_bayar, bukti_bayar, status, keterangan) VALUES (?, ?, ?, ?, ?, 'transfer', ?, 'pending', ?)");
+                $stmtInsert->execute([$dosenId, $bulan, $tahun, $tarifIuran, $tanggalNow, $bukti, $keterangan]);
+            }
+
+            jsonResponse([
+                'status' => 'success',
+                'message' => 'Bukti transfer berhasil dikirim! Menunggu validasi oleh Bendahara.'
+            ]);
+        } catch (Throwable $e) {
+            jsonResponse([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan sistem saat mengirim bukti transfer: ' . $e->getMessage()
+            ], 500);
+        }
         break;
 
     case 'pending_list':

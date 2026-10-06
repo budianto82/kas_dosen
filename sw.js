@@ -3,9 +3,11 @@
  * Version 9 - Network-First for Navigation (No more stale HTML/JS caching)
  */
 
-const CACHE_NAME = 'kas-dosen-v9';
+const CACHE_NAME = 'kas-dosen-v10';
 const STATIC_ASSETS = [
   './manifest.json',
+  './assets/css/style.css?v=2.2',
+  './assets/js/app.js?v=2.2',
   './assets/img/logo_unpam.png',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png'

@@ -36,12 +36,12 @@ $isLoggedIn = !empty($authUser);
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Lucide Icons & Chart.js -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons & Chart.js (Deferred for fast mobile rendering) -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="assets/css/style.css?v=<?= time() ?>">
+  <link rel="stylesheet" href="assets/css/style.css?v=2.2">
 </head>
 <body class="<?= $isLoggedIn ? '' : 'auth-locked' ?>">
 
@@ -951,7 +951,7 @@ $isLoggedIn = !empty($authUser);
       <form onsubmit="App.submitBuktiTransfer(event)" class="space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Dosen Pengirim *</label>
-          <select id="kirimTfDosenSelect" name="dosen_id" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
+          <select id="kirimTfDosenSelect" name="dosen_id" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
             <!-- Populated by JS -->
           </select>
         </div>
@@ -1168,6 +1168,6 @@ $isLoggedIn = !empty($authUser);
   </div>
 
   <!-- Main JavaScript App Logic -->
-  <script src="assets/js/app.js?v=<?= time() ?>"></script>
+  <script src="assets/js/app.js?v=2.2"></script>
 </body>
 </html>

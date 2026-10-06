@@ -82,10 +82,10 @@ const App = {
   // 1. PWA Service Worker & Install Banner
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=9')
+      navigator.serviceWorker.register('./sw.js?v=10')
         .then((reg) => {
           reg.update();
-          console.log('PWA Service Worker v9 terdaftar.');
+          console.log('PWA Service Worker v10 terdaftar.');
         })
         .catch(err => console.log('SW registration failed:', err));
     }
@@ -130,13 +130,16 @@ const App = {
         this.setAuthGated(true);
       }
       this.updateUserUI();
-      // Load all data concurrently for high performance
+      // Muat data esensial dashboard terlebih dahulu agar tampilan di HP langsung terbuka cepat
       await Promise.all([
         this.loadSettings(),
-        this.loadDashboard(),
-        this.loadKategori(),
-        this.loadDosenList()
+        this.loadDashboard()
       ]);
+      // Prefetch data lainnya secara bertahap tanpa membebani performa HP
+      setTimeout(() => {
+        this.loadDosenList();
+        this.loadKategori();
+      }, 150);
     } catch (err) {
       console.error('Check session error:', err);
       if (!this.state.user) {
@@ -1972,10 +1975,23 @@ const App = {
   // 10b. Kirim & Validasi Bukti Transfer Dosen
   tempBuktiTfBase64: null,
 
-  openModalKirimBuktiTf() {
-    // Populate Dosen Dropdown
+  async openModalKirimBuktiTf() {
     const select = document.getElementById('kirimTfDosenSelect');
     if (select) {
+      // Pastikan daftar dosen termuat jika belum ada di state
+      if (!this.state.dosenList || this.state.dosenList.length === 0) {
+        select.innerHTML = '<option value="">Memuat daftar dosen...</option>';
+        try {
+          const res = await fetch('api/dosen.php?action=list');
+          const dData = await res.json();
+          if (dData.status === 'success' && Array.isArray(dData.data)) {
+            this.state.dosenList = dData.data;
+          }
+        } catch (e) {
+          console.error('Error fetching dosen list:', e);
+        }
+      }
+
       const list = this.state.dosenList || [];
       select.innerHTML = '<option value="">-- Pilih Nama Dosen --</option>' + 
         list.map(d => `<option value="${d.id}" data-nidn="${d.nidn}">${d.nama}${d.gelar ? ', ' + d.gelar : ''} (${d.nidn})</option>`).join('');
@@ -1983,14 +1999,12 @@ const App = {
       // Auto-select jika login sebagai dosen
       const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
       if (this.state.user && this.state.user.nidn && !isBendahara) {
-        const found = list.find(d => d.nidn === this.state.user.nidn);
+        const found = list.find(d => String(d.nidn).trim() === String(this.state.user.nidn).trim());
         if (found) {
           select.value = found.id;
-          select.disabled = true;
         }
-      } else {
-        select.disabled = false;
       }
+      select.disabled = false;
     }
 
     // Set bulan & tahun saat ini
@@ -2022,58 +2036,59 @@ const App = {
     if (window.lucide) lucide.createIcons();
   },
 
-  handleBuktiTfFileChange(input) {
+  async handleBuktiTfFileChange(input) {
     const file = input.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      this.showToast('Pilih file gambar (JPG, PNG, WebP).', 'error');
-      input.value = '';
+    if (!file) {
+      this.tempBuktiTfBase64 = null;
+      document.getElementById('buktiTfPlaceholder')?.classList.remove('hidden');
+      document.getElementById('buktiTfPreviewWrap')?.classList.add('hidden');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        // Kompresi gambar via canvas (max 900px, quality 0.72)
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 900;
+    this.showToast('Memproses foto bukti transfer...', 'info');
+    try {
+      const compressed = await this.compressImageFile(file, 900, 0.75);
+      const dataUri = await this.imageFileToCompressedDataUrl(compressed, 900, 0.75);
+      this.tempBuktiTfBase64 = dataUri;
 
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
+      const previewImg = document.getElementById('buktiTfPreviewImg');
+      const placeholder = document.getElementById('buktiTfPlaceholder');
+      const previewWrap = document.getElementById('buktiTfPreviewWrap');
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        this.tempBuktiTfBase64 = canvas.toDataURL('image/jpeg', 0.72);
-
+      if (previewImg) previewImg.src = dataUri;
+      if (placeholder) placeholder.classList.add('hidden');
+      if (previewWrap) previewWrap.classList.remove('hidden');
+    } catch (e) {
+      console.warn('Gagal mengompresi gambar bukti transfer, menggunakan pembaca standar:', e);
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        this.tempBuktiTfBase64 = re.target.result;
         const previewImg = document.getElementById('buktiTfPreviewImg');
         const placeholder = document.getElementById('buktiTfPlaceholder');
         const previewWrap = document.getElementById('buktiTfPreviewWrap');
-
-        if (previewImg) previewImg.src = this.tempBuktiTfBase64;
+        if (previewImg) previewImg.src = re.target.result;
         if (placeholder) placeholder.classList.add('hidden');
         if (previewWrap) previewWrap.classList.remove('hidden');
       };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    }
   },
 
   async submitBuktiTransfer(e) {
     e.preventDefault();
     const selectDosen = document.getElementById('kirimTfDosenSelect');
-    const dosenId = selectDosen ? selectDosen.value : '';
+    let dosenId = selectDosen ? selectDosen.value : '';
+
+    // Fallback otomatis ambil ID dosen dari akun yang sedang login
+    if (!dosenId && this.state.user) {
+      if (this.state.user.dosen_id) {
+        dosenId = this.state.user.dosen_id;
+      } else if (this.state.user.nidn && Array.isArray(this.state.dosenList)) {
+        const found = this.state.dosenList.find(d => String(d.nidn).trim() === String(this.state.user.nidn).trim());
+        if (found) dosenId = found.id;
+      }
+    }
+
     const bulan = document.getElementById('kirimTfBulanSelect')?.value || '';
     const tahun = document.getElementById('kirimTfTahunInput')?.value || '';
     const form = e.target;
@@ -2100,6 +2115,7 @@ const App = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dosen_id: dosenId,
+          nidn: this.state.user ? (this.state.user.nidn || '') : '',
           bulan: bulan,
           tahun: tahun,
           keterangan: keterangan,
@@ -2117,7 +2133,7 @@ const App = {
       }
     } catch (err) {
       console.error(err);
-      this.showToast('Terjadi kesalahan jaringan.', 'error');
+      this.showToast('Terjadi kesalahan jaringan atau server.', 'error');
     } finally {
       if (btn) {
         btn.disabled = false;

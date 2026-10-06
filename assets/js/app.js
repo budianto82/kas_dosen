@@ -293,7 +293,7 @@ const App = {
   handleQuickActionBayar() {
     const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
     if (isBendahara) {
-      this.openModal('modalBayarIuran');
+      this.openModalBayarIuran();
     } else {
       this.openModal('modalCaraBayar');
     }
@@ -811,17 +811,26 @@ const App = {
     const container = document.getElementById('iuranContentArea');
     if (!container) return;
 
+    const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
     const bulanHeaders = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
     const nominalIuran = (this.state.settings && this.state.settings.nominal_iuran_bulanan)
       ? this.formatRupiah(this.state.settings.nominal_iuran_bulanan)
-      : 'Rp 20.000';
+      : 'Rp 30.000';
 
     let html = `
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-4">
         <div class="flex items-center justify-between mb-3">
-          <div class="text-xs font-bold text-slate-800">Matriks Iuran Dosen SI (${data.tahun})</div>
-          <div class="text-[11px] text-slate-500 font-semibold text-blue-900">Iuran: ${nominalIuran} / bln</div>
+          <div>
+            <div class="text-xs font-bold text-slate-800">Matriks Iuran Dosen SI (${data.tahun})</div>
+            <div class="text-[11px] text-slate-500 font-semibold text-blue-900">Iuran: ${nominalIuran} / bln</div>
+          </div>
+          ${isBendahara ? `
+            <button onclick="App.openModalBayarIuran()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1 transition-all">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <span>Catat Iuran</span>
+            </button>
+          ` : ''}
         </div>
 
         <div class="matrix-scroll">
@@ -831,7 +840,7 @@ const App = {
                 <th class="sticky left-0 z-10" style="min-width: 140px;">Nama Dosen</th>
                 ${bulanHeaders.map((b, idx) => `<th class="text-center" style="min-width: 38px;">${b}</th>`).join('')}
                 <th class="text-center" style="min-width: 70px;">Total</th>
-                <th class="text-center" style="min-width: 44px;">Aksi</th>
+                <th class="text-center" style="min-width: 60px;">Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -840,10 +849,14 @@ const App = {
                 for (let m = 1; m <= 12; m++) {
                   const b = d.bulan[m];
                   const isLunas = b.status === 'lunas';
+                  const cellClick = isBendahara 
+                    ? `onclick="App.openModalBayarIuran(${d.dosen_id}, ${m})" style="cursor: pointer;"` 
+                    : '';
                   cells += `
                     <td class="matrix-cell ${isLunas ? 'lunas' : 'belum'}" 
-                        title="${d.nama_lengkap} - Bulan ${m}: ${isLunas ? 'Lunas' : 'Belum'}">
-                      ${isLunas ? '✓' : '-'}
+                        ${cellClick}
+                        title="${d.nama_lengkap} - Bulan ${m}: ${isLunas ? 'Lunas (' + (b.metode || 'transfer').toUpperCase() + ')' : (isBendahara ? 'Klik untuk Catat Iuran' : 'Belum Bayar')}">
+                      ${isLunas ? '✓' : (isBendahara ? '<span class="text-blue-600/70 hover:text-blue-900 font-bold">+</span>' : '-')}
                     </td>
                   `;
                 }
@@ -857,11 +870,20 @@ const App = {
                     ${cells}
                     <td class="text-center text-xs font-bold text-slate-800">${d.total_bayar_formatted}</td>
                     <td class="text-center py-2">
-                      <button onclick="App.openWaReminderModal(${d.dosen_id})" 
-                              class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center mx-auto"
-                              title="Kirim Pengingat WhatsApp">
-                        <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
-                      </button>
+                      <div class="flex items-center justify-center gap-1">
+                        ${isBendahara ? `
+                          <button onclick="App.openModalBayarIuran(${d.dosen_id})" 
+                                  class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center"
+                                  title="Catat Iuran Dosen Ini">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                          </button>
+                        ` : ''}
+                        <button onclick="App.openWaReminderModal(${d.dosen_id})" 
+                                class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center"
+                                title="Kirim Pengingat WhatsApp">
+                          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 `;
@@ -871,15 +893,18 @@ const App = {
         </div>
 
         <!-- Legenda -->
-        <div class="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
-          <div class="flex items-center gap-1.5">
-            <span class="w-3.5 h-3.5 rounded bg-emerald-500 text-white flex items-center justify-center text-[9px] font-bold">✓</span>
-            <span>Lunas</span>
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded bg-emerald-500 text-white flex items-center justify-center text-[9px] font-bold">✓</span>
+              <span>Lunas</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300 text-slate-400 flex items-center justify-center text-[9px] font-bold">-</span>
+              <span>Belum Bayar</span>
+            </div>
           </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300 text-slate-400 flex items-center justify-center text-[9px] font-bold">-</span>
-            <span>Belum Bayar</span>
-          </div>
+          ${isBendahara ? '<span class="text-[10px] text-emerald-700 font-medium italic">*Klik kotak belum bayar (+) untuk catat iuran</span>' : ''}
         </div>
       </div>
     `;
@@ -1184,21 +1209,141 @@ const App = {
 
   populateDosenSelects(list) {
     const select = document.getElementById('formIuranDosen');
-    if (select) {
+    if (select && Array.isArray(list)) {
+      const curVal = select.value;
       select.innerHTML = '<option value="">-- Pilih Dosen --</option>' + 
-        list.map(d => `<option value="${d.id}">${d.nama_lengkap} (${d.nidn})</option>`).join('');
+        list.map(d => `<option value="${d.id}">${d.nama_lengkap || (d.nama + (d.gelar ? ', ' + d.gelar : ''))} (${d.nidn})</option>`).join('');
+      if (curVal) select.value = curVal;
     }
   },
 
   // 9. Modals & Action Handlers
+  tempIuranBuktiBase64: null,
+
+  async openModalBayarIuran(dosenId = null, bulan = null) {
+    const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
+    if (!isBendahara) {
+      this.openModal('modalCaraBayar');
+      return;
+    }
+
+    // 1. Pastikan data dosen siap di select form
+    const select = document.getElementById('formIuranDosen');
+    if (select) {
+      if (!this.state.dosenList || this.state.dosenList.length === 0) {
+        try {
+          const res = await fetch('api/dosen.php?action=list');
+          const dData = await res.json();
+          if (dData.status === 'success' && Array.isArray(dData.data)) {
+            this.state.dosenList = dData.data;
+          }
+        } catch (e) {
+          console.error('Error fetching dosen list:', e);
+        }
+      }
+
+      const list = this.state.dosenList || [];
+      select.innerHTML = '<option value="">-- Pilih Dosen --</option>' + 
+        list.map(d => `<option value="${d.id}">${d.nama_lengkap || (d.nama + (d.gelar ? ', ' + d.gelar : ''))} (${d.nidn})</option>`).join('');
+
+      if (dosenId) {
+        select.value = String(dosenId);
+      }
+    }
+
+    // 2. Set default nominal dari pengaturan
+    const settings = this.state.settings || {};
+    const nominalTarif = settings.nominal_iuran_bulanan ? parseInt(settings.nominal_iuran_bulanan) : 30000;
+    const inputNominal = document.getElementById('formIuranNominal');
+    if (inputNominal) {
+      inputNominal.value = nominalTarif;
+    }
+
+    // 3. Set tahun & tanggal bayar
+    const inputTahun = document.getElementById('formIuranTahun');
+    if (inputTahun) {
+      inputTahun.value = this.state.currentTahun || new Date().getFullYear();
+    }
+    const inputTanggal = document.getElementById('formIuranTanggalBayar');
+    if (inputTanggal) {
+      inputTanggal.value = new Date().toISOString().split('T')[0];
+    }
+
+    // 4. Set checkbox bulan
+    const checkboxes = document.querySelectorAll('#formIuranBulanCheckboxContainer input[type="checkbox"]');
+    const targetBulan = bulan !== null ? parseInt(bulan) : (this.state.currentBulan || (new Date().getMonth() + 1));
+    checkboxes.forEach(cb => {
+      cb.checked = (parseInt(cb.value) === targetBulan);
+    });
+
+    // 5. Reset upload bukti & preview
+    this.tempIuranBuktiBase64 = null;
+    const fileInput = document.getElementById('formIuranBuktiFile');
+    if (fileInput) fileInput.value = '';
+    const previewWrap = document.getElementById('formIuranBuktiPreviewWrap');
+    if (previewWrap) previewWrap.classList.add('hidden');
+
+    const modal = document.getElementById('modalBayarIuran');
+    if (modal) {
+      modal.classList.add('active');
+    }
+    if (window.lucide) lucide.createIcons();
+  },
+
+  quickSelectBulan(mode) {
+    const checkboxes = document.querySelectorAll('#formIuranBulanCheckboxContainer input[type="checkbox"]');
+    const nowBulan = this.state.currentBulan || (new Date().getMonth() + 1);
+
+    checkboxes.forEach(cb => {
+      if (mode === 'now') {
+        cb.checked = (parseInt(cb.value) === nowBulan);
+      } else if (mode === 'all') {
+        cb.checked = true;
+      } else if (mode === 'clear') {
+        cb.checked = false;
+      }
+    });
+  },
+
+  async handleIuranBuktiFileChange(input) {
+    const file = input.files?.[0];
+    if (!file) {
+      this.tempIuranBuktiBase64 = null;
+      document.getElementById('formIuranBuktiPreviewWrap')?.classList.add('hidden');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      this.showToast('Pilih file gambar (JPG, PNG, WebP).', 'error');
+      input.value = '';
+      return;
+    }
+
+    try {
+      const compressed = await this.compressImageFile(file, 900, 0.85);
+      const dataUri = await this.imageFileToCompressedDataUrl(compressed, 900, 0.85);
+      this.tempIuranBuktiBase64 = dataUri;
+
+      const previewImg = document.getElementById('formIuranBuktiPreviewImg');
+      const previewWrap = document.getElementById('formIuranBuktiPreviewWrap');
+      if (previewImg && previewWrap) {
+        previewImg.src = dataUri;
+        previewWrap.classList.remove('hidden');
+      }
+    } catch (e) {
+      console.warn('Gagal memproses pratinjau bukti bayar:', e);
+    }
+  },
+
   openModal(modalId) {
-    if (modalId === 'modalBayarIuran' || modalId === 'modalTambahPengeluaran' || modalId === 'modalTambahDosen') {
+    if (modalId === 'modalBayarIuran') {
+      this.openModalBayarIuran();
+      return;
+    }
+
+    if (modalId === 'modalTambahPengeluaran' || modalId === 'modalTambahDosen') {
       const isBendahara = this.state.user && ['bendahara', 'kaprodi'].includes(this.state.user.role);
       if (!isBendahara) {
-        if (modalId === 'modalBayarIuran') {
-          this.openModal('modalCaraBayar');
-          return;
-        }
         this.showToast('Fitur ini hanya dapat diakses oleh Bendahara / Pengurus.', 'info');
         this.openModal('modalLogin');
         return;
@@ -1255,6 +1400,11 @@ const App = {
         const btnHapus = document.getElementById('btnHapusDosenDetail');
         if (btnHapus) {
           btnHapus.classList.toggle('hidden', !isBendahara || isSelf);
+        }
+
+        const btnCatat = document.getElementById('btnCatatIuranDosenDetail');
+        if (btnCatat) {
+          btnCatat.classList.toggle('hidden', !isBendahara);
         }
 
         const container = document.getElementById('modalDetailDosenRiwayat');
@@ -1316,7 +1466,42 @@ const App = {
   async submitBayarIuran(e) {
     e.preventDefault();
     const form = e.target;
+
+    // 1. Validasi pemilihan dosen
+    const dosenSelect = document.getElementById('formIuranDosen');
+    const dosenId = dosenSelect ? dosenSelect.value : '';
+    if (!dosenId) {
+      this.showToast('Pilih nama dosen terlebih dahulu.', 'error');
+      if (dosenSelect) dosenSelect.focus();
+      return;
+    }
+
+    // 2. Validasi minimal satu bulan dipilih
+    const checkedBulan = form.querySelectorAll('input[name="bulan[]"]:checked');
+    if (!checkedBulan || checkedBulan.length === 0) {
+      this.showToast('Pilih minimal satu bulan iuran.', 'error');
+      return;
+    }
+
+    const btnSubmit = document.getElementById('btnSubmitBayarIuran');
+    const oldBtnHtml = btnSubmit ? btnSubmit.innerHTML : '';
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full mr-2"></span> Menyimpan...';
+    }
+
     const formData = new FormData(form);
+
+    // Lampirkan token autentikasi agar tahan jika sesi/cookie terputus
+    const token = localStorage.getItem('kas_token');
+    if (token && token.length <= 2000) {
+      formData.append('auth_token', token);
+    }
+
+    // Jika ada bukti transfer terkompresi dari file reader
+    if (this.tempIuranBuktiBase64) {
+      formData.append('bukti_bayar', this.tempIuranBuktiBase64);
+    }
 
     try {
       const res = await fetch('api/iuran.php?action=pay', {
@@ -1327,9 +1512,19 @@ const App = {
       if (data.status === 'success') {
         this.showToast(data.message, 'success');
         form.reset();
+        this.tempIuranBuktiBase64 = null;
+        const previewWrap = document.getElementById('formIuranBuktiPreviewWrap');
+        if (previewWrap) previewWrap.classList.add('hidden');
+
         this.closeModal('modalBayarIuran');
         this.loadDashboard();
-        if (this.state.currentTab === 'iuran') this.loadIuranTab();
+        if (this.state.currentTab === 'iuran') {
+          this.loadIuranTab();
+        }
+        if (this.activeDetailDosenId && this.activeDetailDosenId == dosenId) {
+          this.openDosenDetailModal(dosenId);
+        }
+        this.loadPendingIuran();
       } else {
         this.showToast(data.message || 'Gagal menyimpan iuran.', 'error');
         if (res.status === 401 || res.status === 403) {
@@ -1338,7 +1533,14 @@ const App = {
         }
       }
     } catch (err) {
+      console.error(err);
       this.showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = oldBtnHtml;
+        if (window.lucide) lucide.createIcons();
+      }
     }
   },
 
@@ -2043,7 +2245,7 @@ const App = {
 
     // Update input nominal default di form catat iuran
     const formNominal = document.getElementById('formIuranNominal');
-    if (formNominal && (!formNominal.value || formNominal.value === '30000')) {
+    if (formNominal) {
       formNominal.value = nominal;
     }
 

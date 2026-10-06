@@ -129,43 +129,61 @@ switch ($action) {
 
     case 'pay':
         requireAuth(['bendahara', 'kaprodi']);
-        // Mendukung upload bukti transfer jika melalui FormData
+        // Mendukung input JSON maupun FormData
         $input = getJsonInput();
 
         $dosenId = (int)($input['dosen_id'] ?? 0);
-        $bulanList = $input['bulan'] ?? []; // bisa array bulan jika bayar borongan
+        $rawBulan = $input['bulan'] ?? $input['bulan[]'] ?? ($_POST['bulan'] ?? ($_POST['bulan[]'] ?? []));
         $tahun = (int)($input['tahun'] ?? date('Y'));
-        $nominalPerBulan = (float)($input['nominal'] ?? ($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 20000));
-        $tanggalBayar = $input['tanggal_bayar'] ?? date('Y-m-d');
-        $metodeBayar = $input['metode_bayar'] ?? 'transfer';
+        
+        $nominalPerBulan = (float)($input['nominal'] ?? 0);
+        if ($nominalPerBulan <= 0) {
+            $nominalPerBulan = (float)($pdo->query("SELECT setting_value FROM pengaturan WHERE setting_key = 'nominal_iuran_bulanan'")->fetchColumn() ?: 30000);
+        }
+
+        $tanggalBayar = !empty($input['tanggal_bayar']) ? $input['tanggal_bayar'] : date('Y-m-d');
+        $metodeBayar = !empty($input['metode_bayar']) ? $input['metode_bayar'] : 'transfer';
         $keterangan = trim($input['keterangan'] ?? '');
         $status = trim($input['status'] ?? 'lunas'); // default lunas jika diinput bendahara
 
         if (!$dosenId) {
-            jsonResponse(['status' => 'error', 'message' => 'Dosen wajib dipilih.'], 400);
+            jsonResponse(['status' => 'error', 'message' => 'Pilih data dosen terlebih dahulu.'], 400);
         }
 
-        // Normalisasi bulan (bisa single int atau array)
-        if (!is_array($bulanList)) {
-            $bulanList = [(int)$bulanList];
+        // Normalisasi bulan (array, string berpisahkan koma, atau int tunggal)
+        if (is_string($rawBulan)) {
+            $bulanList = strpos($rawBulan, ',') !== false ? explode(',', $rawBulan) : [$rawBulan];
+        } elseif (is_array($rawBulan)) {
+            $bulanList = $rawBulan;
+        } else {
+            $bulanList = [$rawBulan];
         }
 
-        if (empty($bulanList)) {
-            jsonResponse(['status' => 'error', 'message' => 'Pilih minimal satu bulan iuran.'], 400);
+        $bulanClean = [];
+        foreach ($bulanList as $b) {
+            $bInt = (int)$b;
+            if ($bInt >= 1 && $bInt <= 12 && !in_array($bInt, $bulanClean)) {
+                $bulanClean[] = $bInt;
+            }
+        }
+        sort($bulanClean);
+
+        if (empty($bulanClean)) {
+            jsonResponse(['status' => 'error', 'message' => 'Pilih minimal satu bulan iuran yang valid.'], 400);
         }
 
-        // Cek bukti transfer jika ada
+        // Cek bukti transfer (upload berkas fisik atau base64 payload)
         $buktiPath = handleFileUpload('bukti_bayar', 'bukti_bayar');
+        if (empty($buktiPath) && !empty($input['bukti_bayar']) && is_string($input['bukti_bayar']) && str_starts_with($input['bukti_bayar'], 'data:image')) {
+            $buktiPath = $input['bukti_bayar'];
+        }
 
         $stmtCheck = $pdo->prepare("SELECT id FROM iuran WHERE dosen_id = ? AND bulan = ? AND tahun = ?");
         $stmtInsert = $pdo->prepare("INSERT INTO iuran (dosen_id, bulan, tahun, nominal, tanggal_bayar, metode_bayar, bukti_bayar, status, keterangan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmtUpdate = $pdo->prepare("UPDATE iuran SET nominal = ?, tanggal_bayar = ?, metode_bayar = ?, bukti_bayar = COALESCE(?, bukti_bayar), status = ?, keterangan = ? WHERE id = ?");
 
         $berhasil = 0;
-        foreach ($bulanList as $bln) {
-            $bln = (int)$bln;
-            if ($bln < 1 || $bln > 12) continue;
-
+        foreach ($bulanClean as $bln) {
             $stmtCheck->execute([$dosenId, $bln, $tahun]);
             $existingId = $stmtCheck->fetchColumn();
 
@@ -177,9 +195,20 @@ switch ($action) {
             $berhasil++;
         }
 
+        if ($berhasil === 0) {
+            jsonResponse(['status' => 'error', 'message' => 'Tidak ada periode iuran yang berhasil disimpan.'], 400);
+        }
+
+        $totalNominal = $berhasil * $nominalPerBulan;
         jsonResponse([
             'status' => 'success',
-            'message' => "Berhasil mencatat iuran untuk $berhasil bulan."
+            'message' => "Berhasil mencatat iuran untuk $berhasil bulan (" . formatRupiah($totalNominal) . ").",
+            'data' => [
+                'dosen_id' => $dosenId,
+                'bulan' => $bulanClean,
+                'tahun' => $tahun,
+                'total_nominal' => $totalNominal
+            ]
         ]);
         break;
 

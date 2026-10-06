@@ -307,7 +307,7 @@ $isLoggedIn = !empty($authUser);
               <i data-lucide="info" class="w-3.5 h-3.5"></i>
               <span>Rekening</span>
             </button>
-            <button id="btnTambahIuran" onclick="App.openModal('modalBayarIuran')" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-emerald-700 hidden">
+            <button id="btnTambahIuran" onclick="App.openModalBayarIuran()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-emerald-700 hidden">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>+ Catat</span>
             </button>
@@ -653,7 +653,7 @@ $isLoggedIn = !empty($authUser);
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <form onsubmit="App.submitBayarIuran(event)" enctype="multipart/form-data" class="space-y-3">
+      <form id="formBayarIuran" onsubmit="App.submitBayarIuran(event)" enctype="multipart/form-data" class="space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Dosen *</label>
           <select id="formIuranDosen" name="dosen_id" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-900 focus:outline-none">
@@ -662,15 +662,22 @@ $isLoggedIn = !empty($authUser);
         </div>
         
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Bulan Iuran (Bisa pilih lebih dari 1) *</label>
-          <div class="grid grid-cols-4 gap-1.5 text-xs text-slate-700">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold text-slate-700">Bulan Iuran (Bisa pilih lebih dari 1) *</label>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="App.quickSelectBulan('now')" class="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-900 rounded-lg hover:bg-blue-100 transition-colors">Bulan Ini</button>
+              <button type="button" onclick="App.quickSelectBulan('all')" class="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">Semua</button>
+              <button type="button" onclick="App.quickSelectBulan('clear')" class="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-500 rounded-lg hover:bg-rose-50 hover:text-rose-600 transition-colors">Hapus</button>
+            </div>
+          </div>
+          <div id="formIuranBulanCheckboxContainer" class="grid grid-cols-4 gap-1.5 text-xs text-slate-700">
             <?php
             $bulanNama = [1=>'Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
             $blnNow = (int)date('n');
             foreach ($bulanNama as $num => $nama):
             ?>
-              <label class="flex items-center gap-1 p-1.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-blue-50">
-                <input type="checkbox" name="bulan[]" value="<?= $num ?>" <?= $num === $blnNow ? 'checked' : '' ?> class="rounded text-blue-900">
+              <label class="flex items-center gap-1 p-1.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-blue-50 transition-colors">
+                <input type="checkbox" name="bulan[]" value="<?= $num ?>" <?= $num === $blnNow ? 'checked' : '' ?> class="rounded text-blue-900 bulan-checkbox">
                 <span class="text-[11px] font-medium"><?= $nama ?></span>
               </label>
             <?php endforeach; ?>
@@ -680,22 +687,22 @@ $isLoggedIn = !empty($authUser);
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Tahun *</label>
-            <input type="number" name="tahun" value="<?= date('Y') ?>" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <input type="number" id="formIuranTahun" name="tahun" value="<?= date('Y') ?>" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal per Bulan *</label>
-            <input type="number" name="nominal" id="formIuranNominal" value="20000" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal per Bulan (Rp) *</label>
+            <input type="number" name="nominal" id="formIuranNominal" value="30000" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Bayar *</label>
-            <input type="date" name="tanggal_bayar" value="<?= date('Y-m-d') ?>" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <input type="date" id="formIuranTanggalBayar" name="tanggal_bayar" value="<?= date('Y-m-d') ?>" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Metode Bayar *</label>
-            <select name="metode_bayar" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <select name="metode_bayar" id="formIuranMetode" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium">
               <option value="transfer">Transfer Bank</option>
               <option value="tunai">Tunai / Cash</option>
               <option value="qris">QRIS</option>
@@ -704,17 +711,21 @@ $isLoggedIn = !empty($authUser);
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Upload Bukti Transfer (Opsional / Foto)</label>
-          <input type="file" name="bukti_bayar" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Upload Bukti Transfer / Kuitansi (Opsional)</label>
+          <input type="file" id="formIuranBuktiFile" name="bukti_bayar" accept="image/*" onchange="App.handleIuranBuktiFileChange(this)" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100">
+          <div id="formIuranBuktiPreviewWrap" class="mt-2 hidden">
+            <img id="formIuranBuktiPreviewImg" src="" alt="Pratinjau Bukti" class="max-h-36 rounded-lg border border-slate-200 object-contain mx-auto shadow-sm">
+          </div>
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Keterangan Tambahan</label>
-          <input type="text" name="keterangan" placeholder="Contoh: Titip lewat Pak Budi / Iuran rutin" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+          <input type="text" id="formIuranKeterangan" name="keterangan" placeholder="Contoh: Titip lewat Pak Budi / Iuran rutin" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
         </div>
 
-        <button type="submit" class="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-md mt-2">
-          Simpan Iuran Kas
+        <button type="submit" id="btnSubmitBayarIuran" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 mt-2">
+          <i data-lucide="check-circle" class="w-4 h-4"></i>
+          <span>Simpan Iuran Kas</span>
         </button>
       </form>
     </div>
@@ -847,8 +858,12 @@ $isLoggedIn = !empty($authUser);
         </div>
       </div>
 
-      <!-- Tombol Hapus Dosen (Khusus Bendahara) -->
-      <div class="mt-4 pt-3 border-t border-slate-100">
+      <!-- Tombol Aksi Tambahan (Khusus Bendahara) -->
+      <div class="mt-4 pt-3 border-t border-slate-100 space-y-2">
+        <button id="btnCatatIuranDosenDetail" onclick="App.openModalBayarIuran(App.activeDetailDosenId)" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm hidden">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>+ Catat Iuran Dosen Ini</span>
+        </button>
         <button id="btnHapusDosenDetail" onclick="App.deleteActiveDosen()" class="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 hidden">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
           <span>Hapus Dosen dari Sistem</span>
